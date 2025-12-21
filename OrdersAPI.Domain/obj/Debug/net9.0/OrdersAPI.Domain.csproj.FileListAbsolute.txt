@@ -1,0 +1,11 @@
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\bin\Debug\net9.0\OrdersAPI.Domain.deps.json
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\bin\Debug\net9.0\OrdersAPI.Domain.dll
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\bin\Debug\net9.0\OrdersAPI.Domain.pdb
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.AssemblyInfoInputs.cache
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.AssemblyInfo.cs
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.csproj.CoreCompileInputs.cache
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.dll
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\refint\OrdersAPI.Domain.dll
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\OrdersAPI.Domain.pdb
+C:\Users\Merzuk-PC\Desktop\OrdersAPI\OrdersAPI.Domain\obj\Debug\net9.0\ref\OrdersAPI.Domain.dll
