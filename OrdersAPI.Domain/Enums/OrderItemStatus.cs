@@ -1,8 +1,10 @@
-﻿namespace OrdersAPI.Domain.Entities;
+﻿namespace OrdersAPI.Domain.Enums;
 
 public enum OrderItemStatus
 {
     Pending,
     Preparing,
-    Ready
+    Ready,
+    Completed,   // ✅ DODATO
+    Cancelled    // ✅ DODATO
 }

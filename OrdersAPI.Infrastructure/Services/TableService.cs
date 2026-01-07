@@ -8,38 +8,28 @@ using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class TableService : ITableService
+public class TableService(ApplicationDbContext context, IMapper mapper, ILogger<TableService> logger)
+    : ITableService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IMapper _mapper;
-    private readonly ILogger<TableService> _logger;
-
-    public TableService(ApplicationDbContext context, IMapper mapper, ILogger<TableService> logger)
-    {
-        _context = context;
-        _mapper = mapper;
-        _logger = logger;
-    }
-
     public async Task<IEnumerable<TableDto>> GetAllTablesAsync()
     {
-        var tables = await _context.CafeTables
+        var tables = await context.CafeTables
             .Include(t => t.Orders.Where(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled))
             .ToListAsync();
 
-        return _mapper.Map<IEnumerable<TableDto>>(tables);
+        return mapper.Map<IEnumerable<TableDto>>(tables);
     }
 
     public async Task<TableDto> GetTableByIdAsync(Guid id)
     {
-        var table = await _context.CafeTables
+        var table = await context.CafeTables
             .Include(t => t.Orders.Where(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled))
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (table == null)
             throw new KeyNotFoundException($"Table {id} not found");
 
-        return _mapper.Map<TableDto>(table);
+        return mapper.Map<TableDto>(table);
     }
 
     public async Task<TableDto> CreateTableAsync(CreateTableDto dto)
@@ -53,17 +43,17 @@ public class TableService : ITableService
             Status = TableStatus.Available
         };
 
-        _context.CafeTables.Add(table);
-        await _context.SaveChangesAsync();
+        context.CafeTables.Add(table);
+        await context.SaveChangesAsync();
 
-        _logger.LogInformation("Table {TableNumber} created", table.TableNumber);
+        logger.LogInformation("Table {TableNumber} created", table.TableNumber);
 
-        return _mapper.Map<TableDto>(table);
+        return mapper.Map<TableDto>(table);
     }
 
     public async Task UpdateTableAsync(Guid id, UpdateTableDto dto)
     {
-        var table = await _context.CafeTables.FindAsync(id);
+        var table = await context.CafeTables.FindAsync(id);
         if (table == null)
             throw new KeyNotFoundException($"Table {id} not found");
 
@@ -72,32 +62,32 @@ public class TableService : ITableService
         if (dto.Status != null) table.Status = Enum.Parse<TableStatus>(dto.Status);
         if (dto.Location != null) table.Location = dto.Location;
 
-        await _context.SaveChangesAsync();
-        _logger.LogInformation("Table {TableId} updated", id);
+        await context.SaveChangesAsync();
+        logger.LogInformation("Table {TableId} updated", id);
     }
 
     public async Task DeleteTableAsync(Guid id)
     {
-        var table = await _context.CafeTables.FindAsync(id);
+        var table = await context.CafeTables.FindAsync(id);
         if (table == null)
             throw new KeyNotFoundException($"Table {id} not found");
 
-        _context.CafeTables.Remove(table);
-        await _context.SaveChangesAsync();
+        context.CafeTables.Remove(table);
+        await context.SaveChangesAsync();
 
-        _logger.LogInformation("Table {TableId} deleted", id);
+        logger.LogInformation("Table {TableId} deleted", id);
     }
 
     public async Task UpdateTableStatusAsync(Guid id, TableStatus status)
     {
-        var table = await _context.CafeTables.FindAsync(id);
+        var table = await context.CafeTables.FindAsync(id);
         if (table == null)
             throw new KeyNotFoundException($"Table {id} not found");
 
         table.Status = status;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
-        _logger.LogInformation("Table {TableId} status updated to {Status}", id, status);
+        logger.LogInformation("Table {TableId} status updated to {Status}", id, status);
     }
 }
 

@@ -18,4 +18,5 @@ public class Product
     public Category Category { get; set; } = null!;
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     public ICollection<ProductIngredient> ProductIngredients { get; set; } = new List<ProductIngredient>();
+    public ICollection<AccompanimentGroup> AccompanimentGroups { get; set; } = new List<AccompanimentGroup>();
 }

@@ -19,6 +19,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ProcurementOrderItem> ProcurementOrderItems => Set<ProcurementOrderItem>();
     public DbSet<InventoryLog> InventoryLogs => Set<InventoryLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AccompanimentGroup> AccompanimentGroups => Set<AccompanimentGroup>();
+    public DbSet<Accompaniment> Accompaniments => Set<Accompaniment>();
+    public DbSet<OrderItemAccompaniment> OrderItemAccompaniments => Set<OrderItemAccompaniment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -184,6 +187,47 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // AccompanimentGroup
+        modelBuilder.Entity<AccompanimentGroup>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SelectionType).HasConversion<string>();
+
+            entity.HasOne(e => e.Product)
+                .WithMany(e => e.AccompanimentGroups)
+                .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Accompaniment
+        modelBuilder.Entity<Accompaniment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ExtraCharge).HasPrecision(18, 2);
+
+            entity.HasOne(e => e.AccompanimentGroup)
+                .WithMany(e => e.Accompaniments)
+                .HasForeignKey(e => e.AccompanimentGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // OrderItemAccompaniment
+        modelBuilder.Entity<OrderItemAccompaniment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PriceAtOrder).HasPrecision(18, 2);
+
+            entity.HasOne(e => e.OrderItem)
+                .WithMany(e => e.OrderItemAccompaniments)
+                .HasForeignKey(e => e.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Accompaniment)
+                .WithMany(e => e.OrderItemAccompaniments)
+                .HasForeignKey(e => e.AccompanimentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

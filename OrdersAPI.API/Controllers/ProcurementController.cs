@@ -9,21 +9,15 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
-public class ProcurementController : ControllerBase
+public class ProcurementController(IProcurementService procurementService, ILogger<ProcurementController> logger)
+    : ControllerBase
 {
-    private readonly IProcurementService _procurementService;
-    private readonly ILogger<ProcurementController> _logger;
-
-    public ProcurementController(IProcurementService procurementService, ILogger<ProcurementController> logger)
-    {
-        _procurementService = procurementService;
-        _logger = logger;
-    }
+    private readonly ILogger<ProcurementController> _logger = logger;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProcurementOrderDto>>> GetProcurementOrders([FromQuery] Guid? storeId = null)
     {
-        var orders = await _procurementService.GetAllProcurementOrdersAsync(storeId);
+        var orders = await procurementService.GetAllProcurementOrdersAsync(storeId);
         return Ok(orders);
     }
 
@@ -32,7 +26,7 @@ public class ProcurementController : ControllerBase
     {
         try
         {
-            var order = await _procurementService.GetProcurementOrderByIdAsync(id);
+            var order = await procurementService.GetProcurementOrderByIdAsync(id);
             return Ok(order);
         }
         catch (KeyNotFoundException ex)
@@ -44,7 +38,7 @@ public class ProcurementController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProcurementOrderDto>> CreateProcurementOrder([FromBody] CreateProcurementDto dto)
     {
-        var order = await _procurementService.CreateProcurementOrderAsync(dto);
+        var order = await procurementService.CreateProcurementOrderAsync(dto);
         return CreatedAtAction(nameof(GetProcurementOrder), new { id = order.Id }, order);
     }
 
@@ -53,7 +47,7 @@ public class ProcurementController : ControllerBase
     {
         try
         {
-            var clientSecret = await _procurementService.CreatePaymentIntentAsync(id);
+            var clientSecret = await procurementService.CreatePaymentIntentAsync(id);
             return Ok(new PaymentIntentDto { ClientSecret = clientSecret });
         }
         catch (KeyNotFoundException ex)
@@ -67,7 +61,7 @@ public class ProcurementController : ControllerBase
     {
         try
         {
-            await _procurementService.ConfirmPaymentAsync(id, dto.PaymentIntentId);
+            await procurementService.ConfirmPaymentAsync(id, dto.PaymentIntentId);
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -86,7 +80,7 @@ public class ProcurementController : ControllerBase
         try
         {
             var procurementStatus = Enum.Parse<ProcurementStatus>(status);
-            await _procurementService.UpdateProcurementStatusAsync(id, procurementStatus);
+            await procurementService.UpdateProcurementStatusAsync(id, procurementStatus);
             return NoContent();
         }
         catch (KeyNotFoundException ex)

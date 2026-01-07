@@ -4,8 +4,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OrdersAPI.Application.Interfaces;
-using OrdersAPI.Application.Extensions;
-using OrdersAPI.API.Middleware;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Messaging.Consumers;
 using OrdersAPI.Infrastructure.Services;
@@ -13,11 +11,7 @@ using OrdersAPI.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ==================== CONTROLLERS ====================
-builder.Services.AddControllers(options =>
-{
-    // ✅ NOVO: Automatska validacija DTO-a kroz ValidationFilter
-    options.Filters.Add<ValidationFilter>();
-});
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // ==================== SWAGGER ====================
@@ -71,16 +65,6 @@ builder.Services.AddAuthorization();
 // ==================== AUTOMAPPER ====================
 builder.Services.AddAutoMapper(typeof(OrdersAPI.Application.Mappings.MappingProfile));
 
-// ==================== FLUENTVALIDATION ====================
-// ✅ NOVO: Registruj sve FluentValidation validators
-builder.Services.AddValidators();
-
-// ==================== EXCEPTION HANDLING ====================
-// ✅ NOVO: Global exception handler i validation filter
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-builder.Services.AddScoped<ValidationFilter>();
-
 // ==================== MASSTRANSIT (RabbitMQ) ====================
 builder.Services.AddMassTransit(x =>
 {
@@ -118,6 +102,7 @@ builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
+builder.Services.AddScoped<IAccompanimentService, AccompanimentService>(); // ← DODANO
 
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
@@ -149,9 +134,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-// ✅ NOVO: Exception handler mora biti prije ostalih middleware-a
-app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFlutter");

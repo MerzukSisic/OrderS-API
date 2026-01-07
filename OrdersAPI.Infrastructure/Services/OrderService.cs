@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Messaging.Events;
 
@@ -203,7 +204,11 @@ public class OrderService(
 
     public async Task UpdateOrderStatusAsync(Guid id, OrderStatus status)
     {
-        var order = await _context.Orders.FindAsync(id);
+        var order = await _context.Orders
+            .Include(o => o.Items) // ✅ Load order items
+            .Include(o => o.Table) // ✅ Load table
+            .FirstOrDefaultAsync(o => o.Id == id);
+            
         if (order == null)
             throw new KeyNotFoundException($"Order {id} not found");
 
@@ -211,7 +216,58 @@ public class OrderService(
         order.UpdatedAt = DateTime.UtcNow;
 
         if (status == OrderStatus.Completed)
+        {
             order.CompletedAt = DateTime.UtcNow;
+            
+            // ✅ Update all order items to Completed
+            foreach (var item in order.Items)
+            {
+                item.Status = OrderItemStatus.Completed;
+            }
+            
+            // ✅ Free the table if order is completed
+            if (order.TableId.HasValue && order.Table != null)
+            {
+                // Check if there are other active orders for this table
+                var hasOtherActiveOrders = await _context.Orders
+                    .AnyAsync(o => 
+                        o.TableId == order.TableId && 
+                        o.Id != id && 
+                        o.Status != OrderStatus.Completed && 
+                        o.Status != OrderStatus.Cancelled);
+                
+                if (!hasOtherActiveOrders)
+                {
+                    order.Table.Status = TableStatus.Available;
+                }
+            }
+        }
+        
+        // ✅ Update all order items to Cancelled if order is cancelled
+        if (status == OrderStatus.Cancelled)
+        {
+            foreach (var item in order.Items)
+            {
+                item.Status = OrderItemStatus.Cancelled;
+            }
+            
+            // ✅ Free the table if order is cancelled
+            if (order.TableId.HasValue && order.Table != null)
+            {
+                // Check if there are other active orders for this table
+                var hasOtherActiveOrders = await _context.Orders
+                    .AnyAsync(o => 
+                        o.TableId == order.TableId && 
+                        o.Id != id && 
+                        o.Status != OrderStatus.Completed && 
+                        o.Status != OrderStatus.Cancelled);
+                
+                if (!hasOtherActiveOrders)
+                {
+                    order.Table.Status = TableStatus.Available;
+                }
+            }
+        }
 
         await _context.SaveChangesAsync();
         logger.LogInformation("Order {OrderId} status updated to {Status}", id, status);
@@ -231,5 +287,3 @@ public class OrderService(
         return mapper.Map<IEnumerable<OrderDto>>(orders);
     }
 }
-
-

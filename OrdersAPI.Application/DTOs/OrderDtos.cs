@@ -28,6 +28,7 @@ public class OrderItemDto
     public decimal Subtotal { get; set; }
     public string? Notes { get; set; }
     public string Status { get; set; } = string.Empty;
+    public List<SelectedAccompanimentDto> SelectedAccompaniments { get; set; } = new();
 }
 
 public class CreateOrderDto
@@ -44,6 +45,7 @@ public class CreateOrderItemDto
     public Guid ProductId { get; set; }
     public int Quantity { get; set; }
     public string? Notes { get; set; }
+    public List<Guid> SelectedAccompanimentIds { get; set; } = new();
 }
 
 public class UpdateOrderStatusDto

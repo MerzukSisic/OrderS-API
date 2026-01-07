@@ -9,21 +9,15 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class TablesController : ControllerBase
+public class TablesController(ITableService tableService, ILogger<TablesController> logger)
+    : ControllerBase
 {
-    private readonly ITableService _tableService;
-    private readonly ILogger<TablesController> _logger;
-
-    public TablesController(ITableService tableService, ILogger<TablesController> logger)
-    {
-        _tableService = tableService;
-        _logger = logger;
-    }
+    private readonly ILogger<TablesController> _logger = logger;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TableDto>>> GetTables()
     {
-        var tables = await _tableService.GetAllTablesAsync();
+        var tables = await tableService.GetAllTablesAsync();
         return Ok(tables);
     }
 
@@ -32,7 +26,7 @@ public class TablesController : ControllerBase
     {
         try
         {
-            var table = await _tableService.GetTableByIdAsync(id);
+            var table = await tableService.GetTableByIdAsync(id);
             return Ok(table);
         }
         catch (KeyNotFoundException ex)
@@ -45,7 +39,7 @@ public class TablesController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<TableDto>> CreateTable([FromBody] CreateTableDto dto)
     {
-        var table = await _tableService.CreateTableAsync(dto);
+        var table = await tableService.CreateTableAsync(dto);
         return CreatedAtAction(nameof(GetTable), new { id = table.Id }, table);
     }
 
@@ -55,7 +49,7 @@ public class TablesController : ControllerBase
     {
         try
         {
-            await _tableService.UpdateTableAsync(id, dto);
+            await tableService.UpdateTableAsync(id, dto);
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -70,7 +64,7 @@ public class TablesController : ControllerBase
         try
         {
             var tableStatus = Enum.Parse<TableStatus>(status);
-            await _tableService.UpdateTableStatusAsync(id, tableStatus);
+            await tableService.UpdateTableStatusAsync(id, tableStatus);
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -85,7 +79,7 @@ public class TablesController : ControllerBase
     {
         try
         {
-            await _tableService.DeleteTableAsync(id);
+            await tableService.DeleteTableAsync(id);
             return NoContent();
         }
         catch (KeyNotFoundException ex)

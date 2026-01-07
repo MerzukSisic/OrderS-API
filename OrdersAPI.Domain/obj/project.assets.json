@@ -8,32 +8,24 @@
     "net9.0": []
   },
   "packageFolders": {
-    "C:\\Users\\Merzuk-PC\\.nuget\\packages\\": {},
-    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+    "/Users/merzuksisic/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj",
+      "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj",
       "projectName": "OrdersAPI.Domain",
-      "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj",
-      "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\obj\\",
+      "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj",
+      "packagesPath": "/Users/merzuksisic/.nuget/packages/",
+      "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/obj/",
       "projectStyle": "PackageReference",
-      "fallbackFolders": [
-        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-      ],
       "configFilePaths": [
-        "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net9.0"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-        "C:\\Program Files\\dotnet\\library-packs": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -52,7 +44,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.200"
+      "SdkAnalysisLevel": "9.0.300"
     },
     "frameworks": {
       "net9.0": {
@@ -73,7 +65,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.201/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.308/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

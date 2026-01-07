@@ -1,4 +1,6 @@
-﻿namespace OrdersAPI.Domain.Entities;
+﻿using OrdersAPI.Domain.Enums;
+
+namespace OrdersAPI.Domain.Entities;
 
 public class OrderItem
 {
@@ -14,4 +16,5 @@ public class OrderItem
 
     public Order Order { get; set; } = null!;
     public Product Product { get; set; } = null!;
+    public ICollection<OrderItemAccompaniment> OrderItemAccompaniments { get; set; } = new List<OrderItemAccompaniment>();
 }

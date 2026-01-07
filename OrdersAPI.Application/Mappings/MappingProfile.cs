@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.Application.Mappings;
 
@@ -15,7 +16,8 @@ public class MappingProfile : Profile
 
         CreateMap<OrderItem, OrderItemDto>()
             .ForMember(d => d.ProductName, o => o.MapFrom(s => s.Product.Name))
-            .ForMember(d => d.PreparationLocation, o => o.MapFrom(s => s.Product.Location.ToString()));
+            .ForMember(d => d.PreparationLocation, o => o.MapFrom(s => s.Product.Location.ToString()))
+            .ForMember(d => d.SelectedAccompaniments, o => o.MapFrom(s => s.OrderItemAccompaniments));
 
         // Products
         CreateMap<Product, ProductDto>()
@@ -84,5 +86,46 @@ public class MappingProfile : Profile
             .ForMember(d => d.TotalOrders, o => o.Ignore())
             .ForMember(d => d.TotalRevenue, o => o.Ignore())
             .ForMember(d => d.AverageOrderValue, o => o.Ignore());
+
+        // Accompaniments
+        CreateMap<AccompanimentGroup, AccompanimentGroupDto>()
+            .ForMember(d => d.SelectionType, o => o.MapFrom(s => s.SelectionType.ToString()))
+            .ForMember(d => d.Accompaniments, o => o.MapFrom(s => s.Accompaniments.OrderBy(a => a.DisplayOrder)));
+
+        CreateMap<CreateAccompanimentGroupDto, AccompanimentGroup>()
+            .ForMember(d => d.SelectionType, o => o.MapFrom(s => Enum.Parse<SelectionType>(s.SelectionType)))
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.Product, o => o.Ignore())
+            .ForMember(d => d.Accompaniments, o => o.Ignore());
+
+        CreateMap<UpdateAccompanimentGroupDto, AccompanimentGroup>()
+            .ForMember(d => d.SelectionType, o => o.MapFrom(s => Enum.Parse<SelectionType>(s.SelectionType)))
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.ProductId, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.Product, o => o.Ignore())
+            .ForMember(d => d.Accompaniments, o => o.Ignore());
+
+        CreateMap<Accompaniment, AccompanimentDto>();
+
+        CreateMap<CreateAccompanimentDto, Accompaniment>()
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.AccompanimentGroupId, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.AccompanimentGroup, o => o.Ignore())
+            .ForMember(d => d.OrderItemAccompaniments, o => o.Ignore());
+
+        CreateMap<UpdateAccompanimentDto, Accompaniment>()
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.AccompanimentGroupId, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.AccompanimentGroup, o => o.Ignore())
+            .ForMember(d => d.OrderItemAccompaniments, o => o.Ignore());
+
+        CreateMap<OrderItemAccompaniment, SelectedAccompanimentDto>()
+            .ForMember(d => d.AccompanimentId, o => o.MapFrom(s => s.AccompanimentId))
+            .ForMember(d => d.Name, o => o.MapFrom(s => s.Accompaniment.Name))
+            .ForMember(d => d.ExtraCharge, o => o.MapFrom(s => s.PriceAtOrder));
     }
 }
