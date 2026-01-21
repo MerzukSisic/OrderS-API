@@ -2,9 +2,9 @@
 
 public enum OrderItemStatus
 {
-    Pending,
-    Preparing,
-    Ready,
-    Completed,   // ✅ DODATO
-    Cancelled    // ✅ DODATO
+    Pending,      
+    Preparing,    
+    Ready,        
+    Completed,    
+    Cancelled     
 }

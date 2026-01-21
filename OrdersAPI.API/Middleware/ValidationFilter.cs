@@ -4,15 +4,8 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace OrdersAPI.API.Middleware;
 
-public class ValidationFilter : IAsyncActionFilter
+public class ValidationFilter(IServiceProvider serviceProvider) : IAsyncActionFilter
 {
-    private readonly IServiceProvider _serviceProvider;
-
-    public ValidationFilter(IServiceProvider serviceProvider)
-    {
-        _serviceProvider = serviceProvider;
-    }
-
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         foreach (var argument in context.ActionArguments.Values)
@@ -21,7 +14,7 @@ public class ValidationFilter : IAsyncActionFilter
 
             var argumentType = argument.GetType();
             var validatorType = typeof(IValidator<>).MakeGenericType(argumentType);
-            var validator = _serviceProvider.GetService(validatorType) as IValidator;
+            var validator = serviceProvider.GetService(validatorType) as IValidator;
 
             if (validator != null)
             {

@@ -4,21 +4,14 @@ using Microsoft.AspNetCore.Diagnostics;
 
 namespace OrdersAPI.API.Middleware;
 
-public class GlobalExceptionHandler : IExceptionHandler
+public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
-    private readonly ILogger<GlobalExceptionHandler> _logger;
-
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
-    {
-        _logger = logger;
-    }
-
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "An error occurred: {Message}", exception.Message);
+        logger.LogError(exception, "An error occurred: {Message}", exception.Message);
 
         var (statusCode, title, errors) = exception switch
         {

@@ -13,6 +13,7 @@ public class OrderDto
     public decimal TotalAmount { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public List<OrderItemDto> Items { get; set; } = new();
 }
@@ -28,7 +29,15 @@ public class OrderItemDto
     public decimal Subtotal { get; set; }
     public string? Notes { get; set; }
     public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
     public List<SelectedAccompanimentDto> SelectedAccompaniments { get; set; } = new();
+}
+
+public class SelectedAccompanimentDto
+{
+    public Guid AccompanimentId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal ExtraCharge { get; set; }
 }
 
 public class CreateOrderDto
@@ -56,4 +65,19 @@ public class UpdateOrderStatusDto
 public class UpdateOrderItemStatusDto
 {
     public string Status { get; set; } = string.Empty;
+}
+
+public class CancelOrderDto
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
+public class OrderSummaryDto
+{
+    public Guid Id { get; set; }
+    public string TableNumber { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int ItemCount { get; set; }
+    public decimal TotalAmount { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

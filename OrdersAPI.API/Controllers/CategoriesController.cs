@@ -8,43 +8,37 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class CategoriesController : ControllerBase
+public class CategoriesController(ICategoryService categoryService) : ControllerBase
 {
-    private readonly ICategoryService _categoryService;
-    private readonly ILogger<CategoriesController> _logger;
-
-    public CategoriesController(ICategoryService categoryService, ILogger<CategoriesController> logger)
-    {
-        _categoryService = categoryService;
-        _logger = logger;
-    }
-
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
     {
-        var categories = await _categoryService.GetAllCategoriesAsync();
+        var categories = await categoryService.GetAllCategoriesAsync();
         return Ok(categories);
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<CategoryDto>> GetCategory(Guid id)
     {
-        try
-        {
-            var category = await _categoryService.GetCategoryByIdAsync(id);
-            return Ok(category);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var category = await categoryService.GetCategoryByIdAsync(id);
+        return Ok(category);
+    }
+
+    [HttpGet("{id}/with-products")]
+    [AllowAnonymous]
+    public async Task<ActionResult<CategoryWithProductsDto>> GetCategoryWithProducts(Guid id)
+    {
+        var category = await categoryService.GetCategoryWithProductsAsync(id);
+        return Ok(category);
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<CategoryDto>> CreateCategory([FromBody] CreateCategoryDto dto)
     {
-        var category = await _categoryService.CreateCategoryAsync(dto);
+        var category = await categoryService.CreateCategoryAsync(dto);
         return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
     }
 
@@ -52,29 +46,15 @@ public class CategoriesController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateCategory(Guid id, [FromBody] UpdateCategoryDto dto)
     {
-        try
-        {
-            await _categoryService.UpdateCategoryAsync(id, dto);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await categoryService.UpdateCategoryAsync(id, dto);
+        return NoContent();
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteCategory(Guid id)
     {
-        try
-        {
-            await _categoryService.DeleteCategoryAsync(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await categoryService.DeleteCategoryAsync(id);
+        return NoContent();
     }
 }

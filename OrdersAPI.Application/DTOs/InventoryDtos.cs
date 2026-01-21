@@ -1,21 +1,5 @@
 ﻿namespace OrdersAPI.Application.DTOs;
 
-public class StoreDto
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? Address { get; set; }
-    public int ProductCount { get; set; }
-}
-
-public class CreateStoreDto
-{
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? Address { get; set; }
-}
-
 public class StoreProductDto
 {
     public Guid Id { get; set; }
@@ -29,6 +13,7 @@ public class StoreProductDto
     public string Unit { get; set; } = string.Empty;
     public bool IsLowStock { get; set; }
     public DateTime LastRestocked { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class CreateStoreProductDto
@@ -68,4 +53,15 @@ public class AdjustInventoryDto
     public int QuantityChange { get; set; }
     public string Type { get; set; } = "Adjustment";
     public string? Reason { get; set; }
+}
+
+public class ConsumptionForecastDto
+{
+    public Guid StoreProductId { get; set; }
+    public string StoreProductName { get; set; } = string.Empty;
+    public int CurrentStock { get; set; }
+    public double AverageDailyConsumption { get; set; }
+    public int EstimatedDaysUntilDepletion { get; set; }
+    public bool NeedsReorder { get; set; }
+    public string Unit { get; set; } = string.Empty;
 }

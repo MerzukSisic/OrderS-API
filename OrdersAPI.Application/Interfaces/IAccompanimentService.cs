@@ -106,9 +106,7 @@ public interface IAccompanimentService
     Task<decimal> CalculateTotalExtraChargesAsync(List<Guid> accompanimentIds);
 }
 
-/// <summary>
-/// Validation result for accompaniment selection
-/// </summary>
+
 public class ValidationResult
 {
     public bool IsValid { get; set; }

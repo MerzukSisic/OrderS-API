@@ -9,37 +9,30 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class RecommendationsController : ControllerBase
+public class RecommendationsController(IRecommendationService recommendationService) : ControllerBase
 {
-    private readonly IRecommendationService _recommendationService;
-    private readonly ILogger<RecommendationsController> _logger;
-
-    public RecommendationsController(IRecommendationService recommendationService, ILogger<RecommendationsController> logger)
-    {
-        _recommendationService = recommendationService;
-        _logger = logger;
-    }
-
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetRecommendations([FromQuery] int count = 5)
     {
-        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-        var recommendations = await _recommendationService.GetRecommendedProductsAsync(userId, count);
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var recommendations = await recommendationService.GetRecommendedProductsAsync(userId, count);
         return Ok(recommendations);
     }
 
     [HttpGet("popular")]
+    [AllowAnonymous] // Public endpoint
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetPopular([FromQuery] int count = 10)
     {
-        var products = await _recommendationService.GetPopularProductsAsync(count);
+        var products = await recommendationService.GetPopularProductsAsync(count);
         return Ok(products);
     }
 
     [HttpGet("time-based")]
+    [AllowAnonymous] // Public endpoint
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetTimeBasedRecommendations([FromQuery] int count = 5)
     {
-        var hour = DateTime.Now.Hour;
-        var products = await _recommendationService.GetTimeBasedRecommendationsAsync(hour, count);
+        var hour = DateTime.UtcNow.Hour;
+        var products = await recommendationService.GetTimeBasedRecommendationsAsync(hour, count);
         return Ok(products);
     }
 }

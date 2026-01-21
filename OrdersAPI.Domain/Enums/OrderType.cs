@@ -1,4 +1,4 @@
-﻿namespace OrdersAPI.Domain.Entities;
+﻿namespace OrdersAPI.Domain.Enums;
 
 public enum OrderType
 {

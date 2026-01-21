@@ -10,7 +10,7 @@ public class CreateCategoryDtoValidator : AbstractValidator<CreateCategoryDto>
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Ime kategorije je obavezno")
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(50).WithMessage("Ime ne može biti duže od 50 karaktera");
+            .MaximumLength(50).WithMessage("Ime ne moï¿½e biti duï¿½e od 50 karaktera");
     }
 }
 
@@ -20,7 +20,7 @@ public class UpdateCategoryDtoValidator : AbstractValidator<UpdateCategoryDto>
     {
         RuleFor(x => x.Name)
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(50).WithMessage("Ime ne može biti duže od 50 karaktera")
+            .MaximumLength(50).WithMessage("Ime ne moï¿½e biti duï¿½e od 50 karaktera")
             .When(x => x.Name != null);
     }
 }

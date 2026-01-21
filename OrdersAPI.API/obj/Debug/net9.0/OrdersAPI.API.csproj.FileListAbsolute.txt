@@ -174,3 +174,8 @@ C:/Users/Merzuk-PC/Desktop/OrdersAPI/OrdersAPI.API/bin/Debug/net9.0/FluentValida
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/obj/Debug/net9.0/OrdersAPI.API.pdb
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/obj/Debug/net9.0/OrdersAPI.API.genruntimeconfig.cache
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/obj/Debug/net9.0/ref/OrdersAPI.API.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/bin/Debug/net9.0/Microsoft.AspNetCore.Authorization.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/bin/Debug/net9.0/Microsoft.AspNetCore.Metadata.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/bin/Debug/net9.0/Microsoft.Extensions.Options.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/bin/Debug/net9.0/Microsoft.Extensions.Primitives.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/obj/Debug/net9.0/swae.build.ex.cache

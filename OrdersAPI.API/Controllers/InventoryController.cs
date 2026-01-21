@@ -8,11 +8,8 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class InventoryController(IInventoryService inventoryService, ILogger<InventoryController> logger)
-    : ControllerBase
+public class InventoryController(IInventoryService inventoryService) : ControllerBase
 {
-    private readonly ILogger<InventoryController> _logger = logger;
-
     [HttpGet("store-products")]
     public async Task<ActionResult<IEnumerable<StoreProductDto>>> GetStoreProducts([FromQuery] Guid? storeId = null)
     {
@@ -23,15 +20,8 @@ public class InventoryController(IInventoryService inventoryService, ILogger<Inv
     [HttpGet("store-products/{id}")]
     public async Task<ActionResult<StoreProductDto>> GetStoreProduct(Guid id)
     {
-        try
-        {
-            var product = await inventoryService.GetStoreProductByIdAsync(id);
-            return Ok(product);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var product = await inventoryService.GetStoreProductByIdAsync(id);
+        return Ok(product);
     }
 
     [HttpPost("store-products")]
@@ -46,48 +36,28 @@ public class InventoryController(IInventoryService inventoryService, ILogger<Inv
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateStoreProduct(Guid id, [FromBody] UpdateStoreProductDto dto)
     {
-        try
-        {
-            await inventoryService.UpdateStoreProductAsync(id, dto);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await inventoryService.UpdateStoreProductAsync(id, dto);
+        return NoContent();
     }
 
     [HttpDelete("store-products/{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteStoreProduct(Guid id)
     {
-        try
-        {
-            await inventoryService.DeleteStoreProductAsync(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await inventoryService.DeleteStoreProductAsync(id);
+        return NoContent();
     }
 
     [HttpPost("store-products/{id}/adjust")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AdjustInventory(Guid id, [FromBody] AdjustInventoryDto dto)
     {
-        try
-        {
-            await inventoryService.AdjustInventoryAsync(id, dto);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await inventoryService.AdjustInventoryAsync(id, dto);
+        return NoContent();
     }
 
     [HttpGet("low-stock")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<StoreProductDto>>> GetLowStockProducts()
     {
         var products = await inventoryService.GetLowStockProductsAsync();
@@ -95,11 +65,28 @@ public class InventoryController(IInventoryService inventoryService, ILogger<Inv
     }
 
     [HttpGet("logs")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<InventoryLogDto>>> GetInventoryLogs(
         [FromQuery] Guid? storeProductId = null,
         [FromQuery] int days = 30)
     {
         var logs = await inventoryService.GetInventoryLogsAsync(storeProductId, days);
         return Ok(logs);
+    }
+
+    [HttpGet("total-value")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<object>> GetTotalStockValue([FromQuery] Guid? storeId = null)
+    {
+        var totalValue = await inventoryService.GetTotalStockValueAsync(storeId);
+        return Ok(new { totalValue, currency = "BAM" });
+    }
+
+    [HttpGet("consumption-forecast")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<ConsumptionForecastDto>>> GetConsumptionForecast([FromQuery] int days = 30)
+    {
+        var forecast = await inventoryService.GetConsumptionForecastAsync(days);
+        return Ok(forecast);
     }
 }

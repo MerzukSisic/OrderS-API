@@ -1,77 +1,99 @@
-﻿using AutoMapper;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class RecommendationService : IRecommendationService
+public class RecommendationService(
+    ApplicationDbContext context,
+    ILogger<RecommendationService> logger) : IRecommendationService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IMapper _mapper;
-    private readonly ILogger<RecommendationService> _logger;
-
-    public RecommendationService(ApplicationDbContext context, IMapper mapper, ILogger<RecommendationService> logger)
-    {
-        _context = context;
-        _mapper = mapper;
-        _logger = logger;
-    }
+    private const int POPULAR_PRODUCTS_DAYS = 30;
+    private const int SIMILAR_USERS_LIMIT = 20;
 
     public async Task<IEnumerable<ProductDto>> GetRecommendedProductsAsync(Guid? userId = null, int count = 5)
     {
         var recommendations = new List<Product>();
 
-        // 1. TIME-BASED RECOMMENDATIONS (prema dobu dana)
-        var hour = DateTime.Now.Hour;
-        var timeBasedProducts = await GetTimeBasedProductsAsync(hour);
+        // 1. TIME-BASED (2 items)
+        var hour = DateTime.UtcNow.Hour;
+        var timeBasedProducts = await GetTimeBasedProductsInternalAsync(hour);
         recommendations.AddRange(timeBasedProducts.Take(2));
 
-        // 2. POPULAR PRODUCTS (najprodavaniji)
+        // 2. POPULAR PRODUCTS (3 items)
         var popularProducts = await GetPopularProductsInternalAsync(3);
         recommendations.AddRange(popularProducts.Where(p => !recommendations.Any(r => r.Id == p.Id)));
 
-        // 3. USER-BASED (ako postoji userId - collaborative filtering)
+        // 3. USER-BASED (2 items) - ako postoji userId
         if (userId.HasValue)
         {
-            var userBasedProducts = await GetUserBasedRecommendationsAsync(userId.Value);
+            var userBasedProducts = await GetUserBasedRecommendationsInternalAsync(userId.Value);
             recommendations.AddRange(userBasedProducts.Where(p => !recommendations.Any(r => r.Id == p.Id)).Take(2));
         }
 
-        // Vrati unique proizvode
+        // Fallback - ako nema dovoljno preporuka, dodaj random available products
+        if (recommendations.Count < count)
+        {
+            var fallbackProducts = await context.Products
+                .AsNoTracking()
+                .Where(p => p.IsAvailable && !recommendations.Select(r => r.Id).Contains(p.Id))
+                .OrderBy(p => Guid.NewGuid()) // Random
+                .Take(count - recommendations.Count)
+                .ToListAsync();
+
+            recommendations.AddRange(fallbackProducts);
+        }
+
+        // Map to DTO
         var uniqueRecommendations = recommendations
             .GroupBy(p => p.Id)
             .Select(g => g.First())
             .Take(count)
             .ToList();
 
-        return _mapper.Map<IEnumerable<ProductDto>>(uniqueRecommendations);
+        var result = await MapToProductDtos(uniqueRecommendations);
+
+        logger.LogInformation("Generated {Count} recommendations for user {UserId}", 
+            result.Count(), userId);
+
+        return result;
     }
 
     public async Task<IEnumerable<ProductDto>> GetPopularProductsAsync(int count = 10)
     {
         var products = await GetPopularProductsInternalAsync(count);
-        return _mapper.Map<IEnumerable<ProductDto>>(products);
+        var result = await MapToProductDtos(products);
+
+        logger.LogInformation("Retrieved {Count} popular products", result.Count());
+
+        return result;
     }
 
     public async Task<IEnumerable<ProductDto>> GetTimeBasedRecommendationsAsync(int hour, int count = 5)
     {
-        var products = await GetTimeBasedProductsAsync(hour, count);
-        return _mapper.Map<IEnumerable<ProductDto>>(products);
+        var products = await GetTimeBasedProductsInternalAsync(hour, count);
+        var result = await MapToProductDtos(products);
+
+        logger.LogInformation("Retrieved {Count} time-based recommendations for hour {Hour}", 
+            result.Count(), hour);
+
+        return result;
     }
 
-    // PRIVATE HELPER METHODS
+    // ========== PRIVATE HELPER METHODS ==========
 
     private async Task<List<Product>> GetPopularProductsInternalAsync(int count)
     {
-        var last30Days = DateTime.UtcNow.AddDays(-30);
+        var startDate = DateTime.UtcNow.AddDays(-POPULAR_PRODUCTS_DAYS);
 
-        var popularProductIds = await _context.OrderItems
-            .Include(oi => oi.Order)
-            .Where(oi => oi.Order.CreatedAt >= last30Days && oi.Order.Status == OrderStatus.Completed)
+        var popularProductIds = await context.OrderItems
+            .AsNoTracking()
+            .Where(oi => oi.Order.CreatedAt >= startDate && 
+                        oi.Order.Status == OrderStatus.Completed)
             .GroupBy(oi => oi.ProductId)
             .Select(g => new
             {
@@ -85,105 +107,142 @@ public class RecommendationService : IRecommendationService
             .Select(x => x.ProductId)
             .ToListAsync();
 
-        return await _context.Products
-            .Include(p => p.Category)
+        return await context.Products
+            .AsNoTracking()
             .Where(p => popularProductIds.Contains(p.Id) && p.IsAvailable)
             .ToListAsync();
     }
 
-    private async Task<List<Product>> GetTimeBasedProductsAsync(int hour, int count = 5)
+    private async Task<List<Product>> GetTimeBasedProductsInternalAsync(int hour, int count = 5)
     {
-        // BREAKFAST (6-11h): Kafa, sendviči
-        if (hour >= 6 && hour < 11)
+        // ✅ Refactored - koristi Category-based filtering
+        var categoryFilters = GetCategoryFiltersForHour(hour);
+
+        var query = context.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.IsAvailable)
+            .AsQueryable();
+
+        // Apply category filters
+        if (categoryFilters.Any())
         {
-            return await _context.Products
-                .Include(p => p.Category)
-                .Where(p => p.IsAvailable && 
-                           (p.Name.Contains("Kafa") || 
-                            p.Name.Contains("Coffee") || 
-                            p.Name.Contains("Sendvič") ||
-                            p.Name.Contains("Doručak")))
-                .Take(count)
-                .ToListAsync();
+            query = query.Where(p => categoryFilters.Contains(p.Category.Name));
         }
-        // LUNCH (11-15h): Jela, glavna jela
-        else if (hour >= 11 && hour < 15)
-        {
-            return await _context.Products
-                .Include(p => p.Category)
-                .Where(p => p.IsAvailable && p.Category.Name.Contains("Hrana"))
-                .Take(count)
-                .ToListAsync();
-        }
-        // AFTERNOON/DESSERT (15-18h): Deserti, kafa
-        else if (hour >= 15 && hour < 18)
-        {
-            return await _context.Products
-                .Include(p => p.Category)
-                .Where(p => p.IsAvailable && 
-                           (p.Category.Name.Contains("Desert") || 
-                            p.Name.Contains("Kafa")))
-                .Take(count)
-                .ToListAsync();
-        }
-        // EVENING (18-23h): Piće, lagana hrana
-        else
-        {
-            return await _context.Products
-                .Include(p => p.Category)
-                .Where(p => p.IsAvailable && p.Category.Name.Contains("Piće"))
-                .Take(count)
-                .ToListAsync();
-        }
+
+        return await query
+            .OrderByDescending(p => p.Stock) // Prioritize available items
+            .Take(count)
+            .ToListAsync();
     }
 
-    private async Task<List<Product>> GetUserBasedRecommendationsAsync(Guid userId)
+    private async Task<List<Product>> GetUserBasedRecommendationsInternalAsync(Guid userId)
     {
-        // Collaborative Filtering: Pronađi šta naručuju slični korisnici
+        // Collaborative Filtering: Find similar users and recommend their products
 
-        // 1. Uzmi proizvode koje je korisnik naručio
-        var userProductIds = await _context.OrderItems
-            .Include(oi => oi.Order)
-            .Where(oi => oi.Order.WaiterId == userId)
+        // 1. Get user's order history
+        var userProductIds = await context.OrderItems
+            .AsNoTracking()
+            .Where(oi => oi.Order.WaiterId == userId) // Assuming WaiterId is the user placing order
             .Select(oi => oi.ProductId)
             .Distinct()
             .ToListAsync();
 
         if (!userProductIds.Any())
+        {
+            logger.LogInformation("No order history for user {UserId}, returning empty", userId);
             return new List<Product>();
+        }
 
-        // 2. Pronađi druge korisnike koji su naručivali iste proizvode
-        var similarUserIds = await _context.OrderItems
-            .Include(oi => oi.Order)
+        // 2. Find similar users (users who ordered the same products)
+        var similarUserIds = await context.OrderItems
+            .AsNoTracking()
             .Where(oi => userProductIds.Contains(oi.ProductId) && oi.Order.WaiterId != userId)
             .Select(oi => oi.Order.WaiterId)
             .Distinct()
-            .Take(20)
+            .Take(SIMILAR_USERS_LIMIT)
             .ToListAsync();
 
         if (!similarUserIds.Any())
             return new List<Product>();
 
-        // 3. Vrati proizvode koje su naručili slični korisnici, a korisnik nije
-        var recommendedProductIds = await _context.OrderItems
-            .Include(oi => oi.Order)
+        // 3. Get products ordered by similar users but not by current user
+        var recommendedProductIds = await context.OrderItems
+            .AsNoTracking()
             .Where(oi => similarUserIds.Contains(oi.Order.WaiterId) && 
                         !userProductIds.Contains(oi.ProductId))
             .GroupBy(oi => oi.ProductId)
             .Select(g => new
             {
                 ProductId = g.Key,
-                Count = g.Count()
+                Score = g.Count() // How many similar users ordered this
             })
-            .OrderByDescending(x => x.Count)
+            .OrderByDescending(x => x.Score)
             .Take(5)
             .Select(x => x.ProductId)
             .ToListAsync();
 
-        return await _context.Products
-            .Include(p => p.Category)
+        return await context.Products
+            .AsNoTracking()
             .Where(p => recommendedProductIds.Contains(p.Id) && p.IsAvailable)
             .ToListAsync();
     }
-}
 
+    private static List<string> GetCategoryFiltersForHour(int hour)
+    {
+        // BREAKFAST (6-11h)
+        if (hour >= 6 && hour < 11)
+            return new List<string> { "Doručak", "Kafa", "Topli napici", "Sokovi" };
+
+        // LUNCH (11-15h)
+        if (hour >= 11 && hour < 15)
+            return new List<string> { "Glavna jela", "Hrana", "Sendviči", "Burgeri" };
+
+        // AFTERNOON/COFFEE (15-18h)
+        if (hour >= 15 && hour < 18)
+            return new List<string> { "Deserti", "Kafa", "Torte", "Slatkiši" };
+
+        // EVENING/DRINKS (18-23h)
+        return new List<string> { "Piće", "Alkoholna pića", "Bezalkoholna pića", "Kokteli" };
+    }
+
+    private async Task<List<ProductDto>> MapToProductDtos(List<Product> products)
+    {
+        var productIds = products.Select(p => p.Id).ToList();
+
+        // Load full product data with relationships
+        var fullProducts = await context.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductIngredients)
+                .ThenInclude(pi => pi.StoreProduct)
+            .Where(p => productIds.Contains(p.Id))
+            .ToListAsync();
+
+        return fullProducts.Select(p => new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description,
+            Price = p.Price,
+            CategoryId = p.CategoryId,
+            CategoryName = p.Category.Name,
+            ImageUrl = p.ImageUrl,
+            IsAvailable = p.IsAvailable,
+            PreparationLocation = p.Location.ToString(),
+            PreparationTimeMinutes = p.PreparationTimeMinutes,
+            Stock = p.Stock,
+            CreatedAt = p.CreatedAt,
+            UpdatedAt = p.UpdatedAt,
+            Ingredients = p.ProductIngredients.Select(pi => new ProductIngredientDto
+            {
+                Id = pi.Id,
+                StoreProductId = pi.StoreProductId,
+                StoreProductName = pi.StoreProduct.Name,
+                Quantity = pi.Quantity,
+                Unit = pi.StoreProduct.Unit.ToString()
+            }).ToList(),
+            AccompanimentGroups = new List<AccompanimentGroupDto>()
+        }).ToList();
+    }
+}

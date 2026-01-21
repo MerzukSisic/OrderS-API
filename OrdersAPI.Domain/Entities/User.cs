@@ -1,4 +1,6 @@
-﻿namespace OrdersAPI.Domain.Entities;
+﻿using OrdersAPI.Domain.Enums;
+
+namespace OrdersAPI.Domain.Entities;
 
 public class User
 {
@@ -10,7 +12,7 @@ public class User
     public string? PhoneNumber { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; } 
 
     public ICollection<Order> Orders { get; set; } = new List<Order>();
 }

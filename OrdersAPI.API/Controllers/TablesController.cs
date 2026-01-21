@@ -3,17 +3,15 @@ using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class TablesController(ITableService tableService, ILogger<TablesController> logger)
-    : ControllerBase
+public class TablesController(ITableService tableService) : ControllerBase
 {
-    private readonly ILogger<TablesController> _logger = logger;
-
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TableDto>>> GetTables()
     {
@@ -24,15 +22,8 @@ public class TablesController(ITableService tableService, ILogger<TablesControll
     [HttpGet("{id}")]
     public async Task<ActionResult<TableDto>> GetTable(Guid id)
     {
-        try
-        {
-            var table = await tableService.GetTableByIdAsync(id);
-            return Ok(table);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var table = await tableService.GetTableByIdAsync(id);
+        return Ok(table);
     }
 
     [HttpPost]
@@ -47,44 +38,23 @@ public class TablesController(ITableService tableService, ILogger<TablesControll
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateTable(Guid id, [FromBody] UpdateTableDto dto)
     {
-        try
-        {
-            await tableService.UpdateTableAsync(id, dto);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await tableService.UpdateTableAsync(id, dto);
+        return NoContent();
     }
 
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateTableStatus(Guid id, [FromQuery] string status)
     {
-        try
-        {
-            var tableStatus = Enum.Parse<TableStatus>(status);
-            await tableService.UpdateTableStatusAsync(id, tableStatus);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var tableStatus = Enum.Parse<TableStatus>(status);
+        await tableService.UpdateTableStatusAsync(id, tableStatus);
+        return NoContent();
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteTable(Guid id)
     {
-        try
-        {
-            await tableService.DeleteTableAsync(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await tableService.DeleteTableAsync(id);
+        return NoContent();
     }
 }

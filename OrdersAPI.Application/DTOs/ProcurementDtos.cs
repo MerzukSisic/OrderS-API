@@ -21,6 +21,7 @@ public class ProcurementOrderItemDto
     public Guid StoreProductId { get; set; }
     public string StoreProductName { get; set; } = string.Empty;
     public int Quantity { get; set; }
+    public int? ReceivedQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public decimal Subtotal { get; set; }
 }
@@ -44,13 +45,20 @@ public class PaymentIntentDto
     public string ClientSecret { get; set; } = string.Empty;
 }
 
-public class CreatePaymentIntentDto
-{
-    public decimal Amount { get; set; }
-    public string Currency { get; set; } = "KM";
-}
-
 public class ConfirmPaymentDto
 {
     public string PaymentIntentId { get; set; } = string.Empty;
 }
+
+public class ReceiveProcurementDto
+{
+    public List<ReceiveProcurementItemDto> Items { get; set; } = new();
+    public string? Notes { get; set; }
+}
+
+public class ReceiveProcurementItemDto
+{
+    public Guid ItemId { get; set; }
+    public int ReceivedQuantity { get; set; }
+}
+

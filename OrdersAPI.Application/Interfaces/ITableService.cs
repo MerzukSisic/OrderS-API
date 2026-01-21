@@ -1,5 +1,6 @@
 ﻿using OrdersAPI.Application.DTOs;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.Application.Interfaces;
 

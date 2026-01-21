@@ -1,4 +1,6 @@
-﻿namespace OrdersAPI.Domain.Entities;
+﻿using OrdersAPI.Domain.Enums;
+
+namespace OrdersAPI.Domain.Entities;
 
 public class InventoryLog
 {

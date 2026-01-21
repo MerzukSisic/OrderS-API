@@ -1,4 +1,5 @@
 ﻿using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.Infrastructure.Data;
 

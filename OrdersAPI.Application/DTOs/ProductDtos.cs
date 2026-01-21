@@ -13,7 +13,24 @@ public class ProductDto
     public string PreparationLocation { get; set; } = string.Empty;
     public int PreparationTimeMinutes { get; set; }
     public int Stock { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public List<ProductIngredientDto> Ingredients { get; set; } = new();
+    public List<AccompanimentGroupDto> AccompanimentGroups { get; set; } = new();
+}
+
+public class ProductSummaryDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public Guid CategoryId { get; set; }
+    public string CategoryName { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
+    public bool IsAvailable { get; set; }
+    public string PreparationLocation { get; set; } = string.Empty;
+    public int PreparationTimeMinutes { get; set; }
 }
 
 public class CreateProductDto
@@ -57,25 +74,8 @@ public class CreateProductIngredientDto
     public decimal Quantity { get; set; }
 }
 
-public class CategoryDto
+public class BulkUpdateAvailabilityDto
 {
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? IconName { get; set; }
-    public int ProductCount { get; set; }
-}
-
-public class CreateCategoryDto
-{
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? IconName { get; set; }
-}
-
-public class UpdateCategoryDto
-{
-    public string? Name { get; set; }
-    public string? Description { get; set; }
-    public string? IconName { get; set; }
+    public List<Guid> ProductIds { get; set; } = new();
+    public bool IsAvailable { get; set; }
 }

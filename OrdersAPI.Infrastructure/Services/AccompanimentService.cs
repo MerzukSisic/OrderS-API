@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
@@ -8,47 +9,43 @@ using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class AccompanimentService : IAccompanimentService
+public class AccompanimentService(
+    ApplicationDbContext context,
+    IMapper mapper,
+    ILogger<AccompanimentService> logger)
+    : IAccompanimentService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IMapper _mapper;
-
-    public AccompanimentService(ApplicationDbContext context, IMapper mapper)
-    {
-        _context = context;
-        _mapper = mapper;
-    }
-
-    // ============= AccompanimentGroup Operations =============
-
     public async Task<List<AccompanimentGroupDto>> GetByProductIdAsync(Guid productId)
     {
-        var groups = await _context.AccompanimentGroups
+        logger.LogInformation("Fetching accompaniment groups for product {ProductId}", productId);
+        
+        var groups = await context.AccompanimentGroups
             .Include(g => g.Accompaniments.OrderBy(a => a.DisplayOrder))
             .Where(g => g.ProductId == productId)
             .OrderBy(g => g.DisplayOrder)
             .ToListAsync();
 
-        return _mapper.Map<List<AccompanimentGroupDto>>(groups);
+        return mapper.Map<List<AccompanimentGroupDto>>(groups);
     }
 
     public async Task<AccompanimentGroupDto?> GetGroupByIdAsync(Guid id)
     {
-        var group = await _context.AccompanimentGroups
+        var group = await context.AccompanimentGroups
             .Include(g => g.Accompaniments.OrderBy(a => a.DisplayOrder))
             .FirstOrDefaultAsync(g => g.Id == id);
 
-        return group == null ? null : _mapper.Map<AccompanimentGroupDto>(group);
+        return group == null ? null : mapper.Map<AccompanimentGroupDto>(group);
     }
 
     public async Task<AccompanimentGroupDto> CreateGroupAsync(CreateAccompanimentGroupDto dto)
     {
-        // Validate product exists
-        var productExists = await _context.Products.AnyAsync(p => p.Id == dto.ProductId);
+        var productExists = await context.Products.AnyAsync(p => p.Id == dto.ProductId);
         if (!productExists)
-            throw new InvalidOperationException($"Product with ID {dto.ProductId} not found");
+        {
+            logger.LogWarning("Attempted to create accompaniment group for non-existent product {ProductId}", dto.ProductId);
+            throw new KeyNotFoundException($"Product with ID {dto.ProductId} not found");
+        }
 
-        // Create group
         var group = new AccompanimentGroup
         {
             Id = Guid.NewGuid(),
@@ -62,7 +59,6 @@ public class AccompanimentService : IAccompanimentService
             CreatedAt = DateTime.UtcNow
         };
 
-        // Add accompaniments if provided
         if (dto.Accompaniments?.Any() == true)
         {
             foreach (var accDto in dto.Accompaniments)
@@ -79,8 +75,11 @@ public class AccompanimentService : IAccompanimentService
             }
         }
 
-        _context.AccompanimentGroups.Add(group);
-        await _context.SaveChangesAsync();
+        context.AccompanimentGroups.Add(group);
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Created accompaniment group {GroupId} with {Count} accompaniments", 
+            group.Id, group.Accompaniments.Count);
 
         return await GetGroupByIdAsync(group.Id) 
             ?? throw new InvalidOperationException("Failed to retrieve created group");
@@ -88,9 +87,12 @@ public class AccompanimentService : IAccompanimentService
 
     public async Task UpdateGroupAsync(Guid id, UpdateAccompanimentGroupDto dto)
     {
-        var group = await _context.AccompanimentGroups.FindAsync(id);
+        var group = await context.AccompanimentGroups.FindAsync(id);
         if (group == null)
-            throw new InvalidOperationException($"AccompanimentGroup with ID {id} not found");
+        {
+            logger.LogWarning("Attempted to update non-existent accompaniment group {GroupId}", id);
+            throw new KeyNotFoundException($"AccompanimentGroup with ID {id} not found");
+        }
 
         group.Name = dto.Name;
         group.SelectionType = Enum.Parse<SelectionType>(dto.SelectionType);
@@ -99,33 +101,34 @@ public class AccompanimentService : IAccompanimentService
         group.MaxSelections = dto.MaxSelections;
         group.DisplayOrder = dto.DisplayOrder;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
+        
+        logger.LogInformation("Updated accompaniment group {GroupId}", id);
     }
 
     public async Task DeleteGroupAsync(Guid id)
     {
-        var group = await _context.AccompanimentGroups.FindAsync(id);
+        var group = await context.AccompanimentGroups.FindAsync(id);
         if (group == null)
-            throw new InvalidOperationException($"AccompanimentGroup with ID {id} not found");
+            throw new KeyNotFoundException($"AccompanimentGroup with ID {id} not found");
 
-        _context.AccompanimentGroups.Remove(group);
-        await _context.SaveChangesAsync();
+        context.AccompanimentGroups.Remove(group);
+        await context.SaveChangesAsync();
+        
+        logger.LogInformation("Deleted accompaniment group {GroupId}", id);
     }
-
-    // ============= Accompaniment Operations =============
 
     public async Task<AccompanimentDto?> GetAccompanimentByIdAsync(Guid id)
     {
-        var accompaniment = await _context.Accompaniments.FindAsync(id);
-        return accompaniment == null ? null : _mapper.Map<AccompanimentDto>(accompaniment);
+        var accompaniment = await context.Accompaniments.FindAsync(id);
+        return accompaniment == null ? null : mapper.Map<AccompanimentDto>(accompaniment);
     }
 
     public async Task<AccompanimentDto> AddAccompanimentAsync(Guid groupId, CreateAccompanimentDto dto)
     {
-        // Validate group exists
-        var groupExists = await _context.AccompanimentGroups.AnyAsync(g => g.Id == groupId);
+        var groupExists = await context.AccompanimentGroups.AnyAsync(g => g.Id == groupId);
         if (!groupExists)
-            throw new InvalidOperationException($"AccompanimentGroup with ID {groupId} not found");
+            throw new KeyNotFoundException($"AccompanimentGroup with ID {groupId} not found");
 
         var accompaniment = new Accompaniment
         {
@@ -138,81 +141,86 @@ public class AccompanimentService : IAccompanimentService
             CreatedAt = DateTime.UtcNow
         };
 
-        _context.Accompaniments.Add(accompaniment);
-        await _context.SaveChangesAsync();
+        context.Accompaniments.Add(accompaniment);
+        await context.SaveChangesAsync();
 
-        return _mapper.Map<AccompanimentDto>(accompaniment);
+        logger.LogInformation("Added accompaniment {AccompanimentId} to group {GroupId}", 
+            accompaniment.Id, groupId);
+
+        return mapper.Map<AccompanimentDto>(accompaniment);
     }
 
     public async Task UpdateAccompanimentAsync(Guid id, UpdateAccompanimentDto dto)
     {
-        var accompaniment = await _context.Accompaniments.FindAsync(id);
+        var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new InvalidOperationException($"Accompaniment with ID {id} not found");
+            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
 
         accompaniment.Name = dto.Name;
         accompaniment.ExtraCharge = dto.ExtraCharge;
         accompaniment.DisplayOrder = dto.DisplayOrder;
         accompaniment.IsAvailable = dto.IsAvailable;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
+        
+        logger.LogInformation("Updated accompaniment {AccompanimentId}", id);
     }
 
     public async Task DeleteAccompanimentAsync(Guid id)
     {
-        var accompaniment = await _context.Accompaniments.FindAsync(id);
+        var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new InvalidOperationException($"Accompaniment with ID {id} not found");
+            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
 
-        _context.Accompaniments.Remove(accompaniment);
-        await _context.SaveChangesAsync();
+        context.Accompaniments.Remove(accompaniment);
+        await context.SaveChangesAsync();
+        
+        logger.LogInformation("Deleted accompaniment {AccompanimentId}", id);
     }
 
     public async Task<bool> ToggleAvailabilityAsync(Guid id)
     {
-        var accompaniment = await _context.Accompaniments.FindAsync(id);
+        var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new InvalidOperationException($"Accompaniment with ID {id} not found");
+            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
 
         accompaniment.IsAvailable = !accompaniment.IsAvailable;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Toggled availability for accompaniment {AccompanimentId} to {IsAvailable}", 
+            id, accompaniment.IsAvailable);
 
         return accompaniment.IsAvailable;
     }
 
-    // ============= Bulk Operations =============
-
     public async Task<List<AccompanimentDto>> GetAccompanimentsByIdsAsync(List<Guid> accompanimentIds)
     {
-        var accompaniments = await _context.Accompaniments
+        var accompaniments = await context.Accompaniments
             .Where(a => accompanimentIds.Contains(a.Id))
             .ToListAsync();
 
-        return _mapper.Map<List<AccompanimentDto>>(accompaniments);
+        return mapper.Map<List<AccompanimentDto>>(accompaniments);
     }
 
     public async Task<ValidationResult> ValidateSelectionAsync(Guid productId, List<Guid> selectedAccompanimentIds)
     {
         var result = new ValidationResult { IsValid = true };
 
-        // Get all groups for this product
-        var groups = await _context.AccompanimentGroups
+        var groups = await context.AccompanimentGroups
             .Include(g => g.Accompaniments)
             .Where(g => g.ProductId == productId)
             .ToListAsync();
 
         if (!groups.Any())
-            return result; // No accompaniments required
+            return result;
 
         foreach (var group in groups)
         {
-            // Get selected accompaniments for this group
             var groupAccompanimentIds = group.Accompaniments.Select(a => a.Id).ToList();
             var selectedFromGroup = selectedAccompanimentIds
                 .Where(id => groupAccompanimentIds.Contains(id))
                 .ToList();
 
-            // Check if required
             if (group.IsRequired && !selectedFromGroup.Any())
             {
                 result.IsValid = false;
@@ -220,28 +228,24 @@ public class AccompanimentService : IAccompanimentService
                 continue;
             }
 
-            // Check minimum selections
             if (group.MinSelections.HasValue && selectedFromGroup.Count < group.MinSelections.Value)
             {
                 result.IsValid = false;
                 result.Errors.Add($"'{group.Name}' zahtijeva minimum {group.MinSelections.Value} izbora");
             }
 
-            // Check maximum selections
             if (group.MaxSelections.HasValue && selectedFromGroup.Count > group.MaxSelections.Value)
             {
                 result.IsValid = false;
                 result.Errors.Add($"'{group.Name}' dozvoljava maksimum {group.MaxSelections.Value} izbora");
             }
 
-            // Check Single selection type
             if (group.SelectionType == SelectionType.Single && selectedFromGroup.Count > 1)
             {
                 result.IsValid = false;
                 result.Errors.Add($"'{group.Name}' dozvoljava samo jedan izbor");
             }
 
-            // Check availability
             var unavailableAccompaniments = group.Accompaniments
                 .Where(a => selectedFromGroup.Contains(a.Id) && !a.IsAvailable)
                 .Select(a => a.Name)
@@ -254,6 +258,12 @@ public class AccompanimentService : IAccompanimentService
             }
         }
 
+        if (!result.IsValid)
+        {
+            logger.LogWarning("Accompaniment validation failed for product {ProductId}: {Errors}", 
+                productId, string.Join("; ", result.Errors));
+        }
+
         return result;
     }
 
@@ -262,7 +272,7 @@ public class AccompanimentService : IAccompanimentService
         if (!accompanimentIds.Any())
             return 0;
 
-        var totalCharge = await _context.Accompaniments
+        var totalCharge = await context.Accompaniments
             .Where(a => accompanimentIds.Contains(a.Id))
             .SumAsync(a => a.ExtraCharge);
 

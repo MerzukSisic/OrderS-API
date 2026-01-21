@@ -8,29 +8,21 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class StatisticsController : ControllerBase
+public class StatisticsController(IStatisticsService statisticsService) : ControllerBase
 {
-    private readonly IStatisticsService _statisticsService;
-    private readonly ILogger<StatisticsController> _logger;
-
-    public StatisticsController(IStatisticsService statisticsService, ILogger<StatisticsController> logger)
-    {
-        _statisticsService = statisticsService;
-        _logger = logger;
-    }
-
     [HttpGet("dashboard")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<DashboardDto>> GetDashboard()
     {
-        var dashboard = await _statisticsService.GetDashboardStatsAsync();
+        var dashboard = await statisticsService.GetDashboardStatsAsync();
         return Ok(dashboard);
     }
 
     [HttpGet("daily")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<DailyStatisticsDto>> GetDailyStats([FromQuery] DateTime? date = null)
     {
-        var stats = await _statisticsService.GetDailyStatsAsync(date ?? DateTime.Today);
+        var stats = await statisticsService.GetDailyStatsAsync(date ?? DateTime.UtcNow.Date);
         return Ok(stats);
     }
 
@@ -38,7 +30,7 @@ public class StatisticsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<WaiterPerformanceDto>>> GetWaiterPerformance([FromQuery] int days = 30)
     {
-        var performance = await _statisticsService.GetWaiterPerformanceAsync(days);
+        var performance = await statisticsService.GetWaiterPerformanceAsync(days);
         return Ok(performance);
     }
 
@@ -48,7 +40,35 @@ public class StatisticsController : ControllerBase
         [FromQuery] DateTime fromDate,
         [FromQuery] DateTime toDate)
     {
-        var chart = await _statisticsService.GetRevenueChartAsync(fromDate, toDate);
+        var chart = await statisticsService.GetRevenueChartAsync(fromDate, toDate);
         return Ok(chart);
+    }
+
+    [HttpGet("top-selling-products")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<ProductSalesDto>>> GetTopSellingProducts(
+        [FromQuery] int count = 10,
+        [FromQuery] int days = 30)
+    {
+        var products = await statisticsService.GetTopSellingProductsAsync(count, days);
+        return Ok(products);
+    }
+
+    [HttpGet("peak-hours")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<PeakHourDto>>> GetPeakHours([FromQuery] int days = 7)
+    {
+        var peakHours = await statisticsService.GetPeakHoursAsync(days);
+        return Ok(peakHours);
+    }
+
+    [HttpGet("category-sales")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<CategorySalesDto>>> GetCategorySales(
+        [FromQuery] DateTime fromDate,
+        [FromQuery] DateTime toDate)
+    {
+        var categorySales = await statisticsService.GetCategorySalesAsync(fromDate, toDate);
+        return Ok(categorySales);
     }
 }

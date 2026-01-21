@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -8,27 +9,35 @@ using Microsoft.IdentityModel.Tokens;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
+using OrdersAPI.Domain.Enums;
 using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class AuthService(ApplicationDbContext context, IConfiguration configuration, ILogger<AuthService> logger)
+public class AuthService(
+    ApplicationDbContext context, 
+    IConfiguration configuration, 
+    ILogger<AuthService> logger)
     : IAuthService
 {
-    private readonly ApplicationDbContext _context = context;
-    private readonly IConfiguration _configuration = configuration;
-
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+        var user = await context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+        {
+            logger.LogWarning("Failed login attempt for email: {Email}", dto.Email);
             throw new UnauthorizedAccessException("Invalid email or password");
+        }
 
         if (!user.IsActive)
+        {
+            logger.LogWarning("Inactive user attempted login: {Email}", dto.Email);
             throw new UnauthorizedAccessException("User account is inactive");
+        }
 
         var token = GenerateJwtToken(user);
+        var refreshToken = GenerateRefreshToken();
 
         logger.LogInformation("User {Email} logged in successfully", user.Email);
 
@@ -38,14 +47,18 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
-            AccessToken = token
+            AccessToken = token,
+            RefreshToken = refreshToken
         };
     }
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
     {
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+        if (await context.Users.AnyAsync(u => u.Email == dto.Email))
+        {
+            logger.LogWarning("Registration attempt with existing email: {Email}", dto.Email);
             throw new InvalidOperationException("Email already exists");
+        }
 
         var user = new User
         {
@@ -55,13 +68,16 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = Enum.Parse<UserRole>(dto.Role),
             PhoneNumber = dto.PhoneNumber,
-            IsActive = true
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
 
         var token = GenerateJwtToken(user);
+        var refreshToken = GenerateRefreshToken();
 
         logger.LogInformation("User {Email} registered successfully", user.Email);
 
@@ -71,7 +87,8 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
-            AccessToken = token
+            AccessToken = token,
+            RefreshToken = refreshToken
         };
     }
 
@@ -80,16 +97,16 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
         try
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!);
+            var key = Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!);
 
             tokenHandler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(key),
                 ValidateIssuer = true,
-                ValidIssuer = _configuration["Jwt:Issuer"],
+                ValidIssuer = configuration["Jwt:Issuer"],
                 ValidateAudience = true,
-                ValidAudience = _configuration["Jwt:Audience"],
+                ValidAudience = configuration["Jwt:Audience"],
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             }, out _);
@@ -102,11 +119,90 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
         }
     }
 
+    public async Task<AuthResponseDto> RefreshTokenAsync(string refreshToken)
+    {
+        logger.LogInformation("Refresh token requested");
+        
+        throw new NotImplementedException("Refresh token functionality requires database storage. Implement RefreshToken entity first.");
+    }
+
+    public async Task LogoutAsync(Guid userId)
+    {
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+            throw new KeyNotFoundException($"User with ID {userId} not found");
+
+        logger.LogInformation("User {Email} logged out", user.Email);
+    }
+
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordDto dto)
+    {
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+            throw new KeyNotFoundException($"User with ID {userId} not found");
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+        {
+            logger.LogWarning("Failed password change attempt for user {UserId}", userId);
+            throw new UnauthorizedAccessException("Current password is incorrect");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Password changed successfully for user {UserId}", userId);
+    }
+
+    public async Task<UserDto> GetCurrentUserAsync(Guid userId)
+    {
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+            throw new KeyNotFoundException($"User with ID {userId} not found");
+
+        return new UserDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role.ToString(),
+            PhoneNumber = user.PhoneNumber,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt
+        };
+    }
+
+    public async Task RequestPasswordResetAsync(string email)
+    {
+        var user = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        if (user == null)
+        {
+            logger.LogWarning("Password reset requested for non-existent email: {Email}", email);
+            return;
+        }
+
+        logger.LogInformation("Password reset requested for user {Email}", email);
+        
+        throw new NotImplementedException("Password reset requires email service implementation and token storage.");
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        var user = await context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+        if (user == null)
+            throw new KeyNotFoundException("Invalid reset token");
+
+        logger.LogInformation("Password reset for user {Email}", dto.Email);
+        
+        throw new NotImplementedException("Password reset requires token validation implementation.");
+    }
+
     private string GenerateJwtToken(User user)
     {
-        var key = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key not configured");
-        var issuer = _configuration["Jwt:Issuer"];
-        var audience = _configuration["Jwt:Audience"];
+        var key = configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key not configured");
+        var issuer = configuration["Jwt:Issuer"];
+        var audience = configuration["Jwt:Audience"];
 
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -129,5 +225,12 @@ public class AuthService(ApplicationDbContext context, IConfiguration configurat
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
-}
 
+    private static string GenerateRefreshToken()
+    {
+        var randomNumber = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomNumber);
+        return Convert.ToBase64String(randomNumber);
+    }
+}

@@ -9,7 +9,7 @@ public class StoreProduct
     public decimal PurchasePrice { get; set; }
     public int CurrentStock { get; set; }
     public int MinimumStock { get; set; } = 10;
-    public string Unit { get; set; }
+    public string Unit { get; set; } = "pcs";
     public DateTime LastRestocked { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

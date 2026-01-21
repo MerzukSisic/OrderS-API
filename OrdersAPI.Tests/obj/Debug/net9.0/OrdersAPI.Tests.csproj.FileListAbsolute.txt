@@ -942,3 +942,7 @@ C:/Users/Merzuk-PC/Desktop/OrdersAPI/OrdersAPI.Tests/obj/Debug/net9.0/ref/Orders
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/obj/Debug/net9.0/OrdersAPI.Tests.pdb
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/obj/Debug/net9.0/OrdersAPI.Tests.genruntimeconfig.cache
 /Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/obj/Debug/net9.0/ref/OrdersAPI.Tests.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/bin/Debug/net9.0/Microsoft.AspNetCore.Authorization.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/bin/Debug/net9.0/Microsoft.AspNetCore.Metadata.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/bin/Debug/net9.0/Microsoft.Extensions.Options.dll
+/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/bin/Debug/net9.0/Microsoft.Extensions.Primitives.dll

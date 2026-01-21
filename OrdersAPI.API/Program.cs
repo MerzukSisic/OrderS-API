@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using System.Security.Claims;
+using System.Text;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Infrastructure.Data;
+using OrdersAPI.Infrastructure.Hubs;
 using OrdersAPI.Infrastructure.Messaging.Consumers;
 using OrdersAPI.Infrastructure.Services;
 
@@ -56,11 +58,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            
+            NameClaimType = ClaimTypes.Name,
+            RoleClaimType = ClaimTypes.Role
+        };
+
+        // ✅ SignalR support - allow token from query string
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                
+                return Task.CompletedTask;
+            }
         };
     });
 
 builder.Services.AddAuthorization();
+
+// ==================== SIGNALR ====================
+builder.Services.AddSignalR();
 
 // ==================== AUTOMAPPER ====================
 builder.Services.AddAutoMapper(typeof(OrdersAPI.Application.Mappings.MappingProfile));
@@ -102,19 +127,29 @@ builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
-builder.Services.AddScoped<IAccompanimentService, AccompanimentService>(); // ← DODANO
+builder.Services.AddScoped<IAccompanimentService, AccompanimentService>();
+builder.Services.AddScoped<IStoreService, StoreService>(); // ← DODAJ AKO FALI
 
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
 
-// ==================== CORS ====================
+// ==================== CORS (OPTIMIZED FOR DESKTOP) ====================
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFlutter", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();
+    });
+    
+    // ✅ Specific policy for SignalR with credentials
+    options.AddPolicy("AllowSignalR", policy =>
+    {
+        policy.WithOrigins("http://localhost:5220", "http://127.0.0.1:5220")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -128,17 +163,40 @@ using (var scope = app.Services.CreateScope())
     DbInitializer.Initialize(context);
 }
 
-// ==================== MIDDLEWARE ====================
+// ==================== MIDDLEWARE PIPELINE ====================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderS API v1");
+        c.RoutePrefix = "swagger"; // Access at http://localhost:5220/swagger
+    });
 }
 
-app.UseHttpsRedirection();
-app.UseCors("AllowFlutter");
+// ✅ HTTPS Redirect - Disabled for localhost development
+// app.UseHttpsRedirection(); 
+
+// ✅ CORS - Must be before Authentication
+app.UseCors("AllowAll");
+
+// ✅ Routing
+app.UseRouting();
+
+// ✅ Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ✅ SignalR Hub Mapping
+app.MapHub<OrderHub>("/hubs/orders");
+
+// ✅ Controller Mapping
 app.MapControllers();
+
+// ==================== RUN ====================
+Console.WriteLine("🚀 OrderS API is running!");
+Console.WriteLine("📍 API: http://localhost:5220/api");
+Console.WriteLine("📖 Swagger: http://localhost:5220/swagger");
+Console.WriteLine("🔔 SignalR Hub: http://localhost:5220/hubs/orders");
 
 app.Run();

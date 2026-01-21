@@ -8,4 +8,8 @@ public interface INotificationService
     Task<NotificationDto> CreateNotificationAsync(Guid userId, string title, string message, string type);
     Task MarkAsReadAsync(Guid notificationId);
     Task DeleteNotificationAsync(Guid notificationId);
+    
+    Task MarkAllAsReadAsync(Guid userId);
+    Task<int> GetUnreadCountAsync(Guid userId);
+    Task DeleteReadNotificationsAsync(Guid userId);
 }

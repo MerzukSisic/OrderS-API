@@ -8,56 +8,28 @@ namespace OrdersAPI.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ReceiptsController : ControllerBase
+public class ReceiptsController(IReceiptService receiptService) : ControllerBase
 {
-    private readonly IReceiptService _receiptService;
-    private readonly ILogger<ReceiptsController> _logger;
-
-    public ReceiptsController(IReceiptService receiptService, ILogger<ReceiptsController> logger)
-    {
-        _receiptService = receiptService;
-        _logger = logger;
-    }
-
     [HttpGet("customer/{orderId}")]
     public async Task<ActionResult<ReceiptDto>> GetCustomerReceipt(Guid orderId)
     {
-        try
-        {
-            var receipt = await _receiptService.GenerateCustomerReceiptAsync(orderId);
-            return Ok(receipt);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var receipt = await receiptService.GenerateCustomerReceiptAsync(orderId);
+        return Ok(receipt);
     }
 
     [HttpGet("kitchen/{orderId}")]
+    [Authorize(Roles = "Admin,Kitchen")]
     public async Task<ActionResult<KitchenReceiptDto>> GetKitchenReceipt(Guid orderId)
     {
-        try
-        {
-            var receipt = await _receiptService.GenerateKitchenReceiptAsync(orderId);
-            return Ok(receipt);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var receipt = await receiptService.GenerateKitchenReceiptAsync(orderId);
+        return Ok(receipt);
     }
 
     [HttpGet("bar/{orderId}")]
+    [Authorize(Roles = "Admin,Bartender")]
     public async Task<ActionResult<BarReceiptDto>> GetBarReceipt(Guid orderId)
     {
-        try
-        {
-            var receipt = await _receiptService.GenerateBarReceiptAsync(orderId);
-            return Ok(receipt);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var receipt = await receiptService.GenerateBarReceiptAsync(orderId);
+        return Ok(receipt);
     }
 }
