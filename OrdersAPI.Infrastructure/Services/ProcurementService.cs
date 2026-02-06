@@ -14,7 +14,6 @@ public class ProcurementService : IProcurementService
     private readonly ILogger<ProcurementService> _logger;
     private readonly IStripeService _stripeService;
 
-    // ✅ UPDATED CONSTRUCTOR - Added IStripeService
     public ProcurementService(
         ApplicationDbContext context,
         ILogger<ProcurementService> logger,
@@ -127,7 +126,9 @@ public class ProcurementService : IProcurementService
             if (storeProduct == null)
                 throw new KeyNotFoundException($"Store product with ID {itemDto.StoreProductId} not found");
 
-            var subtotal = storeProduct.PurchasePrice * itemDto.Quantity;
+            // ✅ FIX: Use unitCost from DTO if provided, otherwise fallback to PurchasePrice
+            var unitCost = itemDto.UnitCost ?? storeProduct.PurchasePrice;
+            var subtotal = unitCost * itemDto.Quantity;
             totalAmount += subtotal;
 
             procurement.Items.Add(new ProcurementOrderItem
@@ -135,7 +136,7 @@ public class ProcurementService : IProcurementService
                 Id = Guid.NewGuid(),
                 StoreProductId = itemDto.StoreProductId,
                 Quantity = itemDto.Quantity,
-                UnitCost = storeProduct.PurchasePrice,
+                UnitCost = unitCost,  // ✅ Use resolved unitCost (not nullable)
                 Subtotal = subtotal
             });
         }
@@ -150,7 +151,6 @@ public class ProcurementService : IProcurementService
         return await GetProcurementOrderByIdAsync(procurement.Id);
     }
 
-    // ✅ UPDATED - Uses real Stripe integration
     public async Task<PaymentIntentResponseDto> CreatePaymentIntentAsync(Guid procurementOrderId)
     {
         var order = await _context.ProcurementOrders.FindAsync(procurementOrderId);
@@ -175,7 +175,6 @@ public class ProcurementService : IProcurementService
         return paymentIntent;
     }
 
-    // ✅ UPDATED - Verifies payment with Stripe
     public async Task ConfirmPaymentAsync(Guid procurementOrderId, string paymentIntentId)
     {
         var order = await _context.ProcurementOrders
@@ -195,7 +194,7 @@ public class ProcurementService : IProcurementService
         return;
 #endif
 
-         //PRODUCTION: Verify with Stripe
+        // PRODUCTION: Verify with Stripe
         var paymentIntent = await _stripeService.GetPaymentIntentAsync(paymentIntentId);
     
         if (paymentIntent.Status != "succeeded")

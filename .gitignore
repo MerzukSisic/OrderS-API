@@ -1,0 +1,90 @@
+# --- Build output ---
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug*/
+[Rr]elease*/
+x64/
+x86/
+[Aa]ny [Cc]pu/
+[Ll]og/
+*.log
+
+# --- .NET tooling / artifacts ---
+*.dll
+*.exe
+*.pdb
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# --- Visual Studio ---
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# --- Rider / JetBrains ---
+.idea/
+*.sln.iml
+*.DotSettings.user
+
+# --- NuGet ---
+**/packages/*
+!**/packages/build/
+*.nupkg
+*.snupkg
+.nuget/
+# If you use 'packages.config' you may want to keep packages folder ignored (above).
+# If using PackageReference (recommended), packages/ usually doesn't exist.
+
+# --- ASP.NET / IIS ---
+.vscode/
+# (optional) comment out if you want to commit VS Code settings
+# .vscode/
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Archives / dumps (remove from repo if already committed) ---
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+
+# --- NuGet (ako se pojavi /packages folder) ---
+**/packages/*
+!**/packages/build/
+
+# NuGet restore artifacts
+*.nuget.props
+*.nuget.targets
+
+# --- Test results / coverage ---
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+*.opencover.xml
+
+# --- ASP.NET / publish output ---
+publish/
+**/wwwroot/lib/   # ako koristiš LibMan (opciono)
+
+# --- Local env / secrets (preporuka: drži tajne van repoa) ---
+appsettings.*.Local.json
+appsettings.*.local.json
+.env
+*.pem
+*.pfx
+*.p12

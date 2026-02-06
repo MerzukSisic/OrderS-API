@@ -38,11 +38,13 @@ public class CreateProcurementItemDto
 {
     public Guid StoreProductId { get; set; }
     public int Quantity { get; set; }
+    public decimal? UnitCost { get; set; }  
 }
 
 public class PaymentIntentDto
 {
     public string ClientSecret { get; set; } = string.Empty;
+    public string PaymentIntentId { get; set; } = string.Empty;
 }
 
 public class ConfirmPaymentDto
