@@ -174,37 +174,99 @@ public class ProductService(
         return await GetProductByIdAsync(product.Id);
     }
 
-    public async Task UpdateProductAsync(Guid id, UpdateProductDto dto)
+   public async Task UpdateProductAsync(Guid id, UpdateProductDto dto)
+{
+    var product = await context.Products
+        .Include(p => p.ProductIngredients)
+        .Include(p => p.AccompanimentGroups)
+            .ThenInclude(ag => ag.Accompaniments)
+        .FirstOrDefaultAsync(p => p.Id == id);
+
+    if (product == null)
+        throw new KeyNotFoundException($"Product with ID {id} not found");
+
+    if (dto.CategoryId.HasValue)
     {
-        var product = await context.Products.FindAsync(id);
-        if (product == null)
-            throw new KeyNotFoundException($"Product with ID {id} not found");
-
-        if (dto.CategoryId.HasValue)
-        {
-            var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId.Value);
-            if (!categoryExists)
-                throw new KeyNotFoundException($"Category with ID {dto.CategoryId} not found");
-        }
-
-        if (dto.Name != null) product.Name = dto.Name;
-        if (dto.Description != null) product.Description = dto.Description;
-        if (dto.Price.HasValue) product.Price = dto.Price.Value;
-        if (dto.CategoryId.HasValue) product.CategoryId = dto.CategoryId.Value;
-        if (dto.ImageUrl != null) product.ImageUrl = dto.ImageUrl;
-        if (dto.IsAvailable.HasValue) product.IsAvailable = dto.IsAvailable.Value;
-        if (dto.PreparationLocation != null) 
-            product.Location = Enum.Parse<PreparationLocation>(dto.PreparationLocation);
-        if (dto.PreparationTimeMinutes.HasValue) 
-            product.PreparationTimeMinutes = dto.PreparationTimeMinutes.Value;
-        if (dto.Stock.HasValue) product.Stock = dto.Stock.Value;
-
-        product.UpdatedAt = DateTime.UtcNow;
-
-        await context.SaveChangesAsync();
-        
-        logger.LogInformation("Product {ProductId} updated", id);
+        var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId.Value);
+        if (!categoryExists)
+            throw new KeyNotFoundException($"Category with ID {dto.CategoryId} not found");
     }
+
+    // Update basic properties
+    if (dto.Name != null) product.Name = dto.Name;
+    if (dto.Description != null) product.Description = dto.Description;
+    if (dto.Price.HasValue) product.Price = dto.Price.Value;
+    if (dto.CategoryId.HasValue) product.CategoryId = dto.CategoryId.Value;
+    if (dto.ImageUrl != null) product.ImageUrl = dto.ImageUrl;
+    if (dto.IsAvailable.HasValue) product.IsAvailable = dto.IsAvailable.Value;
+    if (dto.PreparationLocation != null) 
+        product.Location = Enum.Parse<PreparationLocation>(dto.PreparationLocation);
+    if (dto.PreparationTimeMinutes.HasValue) 
+        product.PreparationTimeMinutes = dto.PreparationTimeMinutes.Value;
+    if (dto.Stock.HasValue) product.Stock = dto.Stock.Value;
+
+    // ✅ UPDATE INGREDIENTS (if provided)
+    if (dto.Ingredients != null)
+    {
+        // Remove existing ingredients
+        context.ProductIngredients.RemoveRange(product.ProductIngredients);
+        
+        // Add new ingredients
+        foreach (var ingredientDto in dto.Ingredients)
+        {
+            var ingredient = new ProductIngredient
+            {
+                Id = Guid.NewGuid(),
+                ProductId = id,
+                StoreProductId = ingredientDto.StoreProductId,
+                Quantity = ingredientDto.Quantity
+                
+            };
+            context.ProductIngredients.Add(ingredient);
+        }
+    }
+
+    // ✅ UPDATE ACCOMPANIMENT GROUPS (if provided)
+    if (dto.AccompanimentGroups != null)
+    {
+        // Remove existing accompaniment groups (cascade will delete accompaniments)
+        context.AccompanimentGroups.RemoveRange(product.AccompanimentGroups);
+        
+        // Add new accompaniment groups
+        foreach (var groupDto in dto.AccompanimentGroups)
+        {
+            var group = new AccompanimentGroup
+            {
+                Id = Guid.NewGuid(),
+                ProductId = id,
+                Name = groupDto.Name,
+                SelectionType = Enum.Parse<SelectionType>(groupDto.SelectionType),
+                IsRequired = groupDto.IsRequired,
+                MinSelections = groupDto.MinSelections,
+                MaxSelections = groupDto.MaxSelections,
+                DisplayOrder = groupDto.DisplayOrder,
+                CreatedAt = DateTime.UtcNow,
+                Accompaniments = groupDto.Accompaniments?.Select(accDto => new Accompaniment
+                {
+                    Id = Guid.NewGuid(),
+                    Name = accDto.Name,
+                    ExtraCharge = accDto.ExtraCharge,
+                    IsAvailable = accDto.IsAvailable,
+                    DisplayOrder = accDto.DisplayOrder,
+                    CreatedAt = DateTime.UtcNow
+                }).ToList() ?? new List<Accompaniment>()
+            };
+            
+            context.AccompanimentGroups.Add(group);
+        }
+    }
+
+    product.UpdatedAt = DateTime.UtcNow;
+
+    await context.SaveChangesAsync();
+    
+    logger.LogInformation("Product {ProductId} updated", id);
+}
 
     public async Task DeleteProductAsync(Guid id)
     {

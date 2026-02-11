@@ -57,6 +57,10 @@ public class UpdateProductDto
     public string? PreparationLocation { get; set; }
     public int? PreparationTimeMinutes { get; set; }
     public int? Stock { get; set; }
+    
+    // ✅ ADD THESE TWO LINES:
+    public List<CreateProductIngredientDto>? Ingredients { get; set; }
+    public List<CreateAccompanimentGroupDto>? AccompanimentGroups { get; set; }
 }
 
 public class ProductIngredientDto

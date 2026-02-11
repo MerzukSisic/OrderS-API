@@ -77,7 +77,7 @@ public class UserService(
             PhoneNumber = dto.PhoneNumber,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = null
+            UpdatedAt = DateTime.UtcNow
         };
 
         context.Users.Add(user);

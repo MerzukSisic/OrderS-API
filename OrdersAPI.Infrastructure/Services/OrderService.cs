@@ -1,4 +1,5 @@
 ﻿using MassTransit;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -6,6 +7,7 @@ using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 using OrdersAPI.Infrastructure.Data;
+using OrdersAPI.Infrastructure.Hubs;
 using OrdersAPI.Infrastructure.Messaging.Events;
 
 namespace OrdersAPI.Infrastructure.Services;
@@ -14,6 +16,7 @@ public class OrderService(
     ApplicationDbContext context,
     IAccompanimentService accompanimentService,
     IPublishEndpoint publishEndpoint,
+    IHubContext<OrderHub> hubContext, 
     ILogger<OrderService> logger)
     : IOrderService
 {
@@ -53,6 +56,9 @@ public class OrderService(
             };
 
             decimal totalAmount = 0;
+            
+            // ✅ Lista za SignalR notifikacije
+            var signalRNotifications = new List<(Guid orderItemId, string productName, PreparationLocation location, int quantity, string notes, DateTime createdAt)>();
 
             foreach (var itemDto in dto.Items)
             {
@@ -101,7 +107,7 @@ public class OrderService(
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // ✅ FIX: Add accompaniments sa PriceAtOrder
+                // Add accompaniments sa PriceAtOrder
                 if (itemDto.SelectedAccompanimentIds.Any())
                 {
                     var accompaniments = await context.Accompaniments
@@ -117,12 +123,22 @@ public class OrderService(
                         {
                             Id = Guid.NewGuid(),
                             AccompanimentId = accompanimentId,
-                            PriceAtOrder = accompaniment?.ExtraCharge ?? 0 // ✅ DODANO
+                            PriceAtOrder = accompaniment?.ExtraCharge ?? 0
                         });
                     }
                 }
 
                 order.Items.Add(orderItem);
+
+                // ✅ Sačuvaj podatke za SignalR prije nego product izađe iz scope-a
+                signalRNotifications.Add((
+                    orderItem.Id,
+                    product.Name,
+                    product.Location,
+                    orderItem.Quantity,
+                    itemDto.Notes,
+                    orderItem.CreatedAt
+                )!);
 
                 // Reduce product stock
                 product.Stock -= itemDto.Quantity;
@@ -177,7 +193,43 @@ public class OrderService(
                     table.Status = TableStatus.Occupied;
             }
 
+            // ✅ Učitaj waiter i table podatke PRIJE SaveChanges
+            var waiter = await context.Users.FindAsync(waiterId);
+            var tableInfo = order.TableId.HasValue 
+                ? await context.CafeTables.FindAsync(order.TableId.Value) 
+                : null;
+
             await context.SaveChangesAsync();
+
+            // ✅ Pošalji SignalR notifikacije koristeći sačuvane podatke
+            foreach (var notification in signalRNotifications)
+            {
+                var notificationData = new
+                {
+                    OrderItemId = notification.orderItemId,
+                    OrderId = order.Id,
+                    ProductName = notification.productName,
+                    Quantity = notification.quantity,
+                    TableNumber = tableInfo?.TableNumber,
+                    WaiterName = waiter?.FullName,
+                    OrderType = order.Type.ToString(),
+                    IsPartnerOrder = order.IsPartnerOrder,
+                    Notes = notification.notes,
+                    CreatedAt = notification.createdAt
+                };
+
+                if (notification.location == PreparationLocation.Kitchen)
+                {
+                    await hubContext.Clients.Group("Kitchen").SendAsync("NewKitchenOrder", notificationData);
+                    logger.LogInformation("📨 SignalR: Sent NewKitchenOrder notification for item {ItemId}", notification.orderItemId);
+                }
+                else if (notification.location == PreparationLocation.Bar)
+                {
+                    await hubContext.Clients.Group("Bartender").SendAsync("NewBarOrder", notificationData);
+                    logger.LogInformation("📨 SignalR: Sent NewBarOrder notification for item {ItemId}", notification.orderItemId);
+                }
+            }
+
             await transaction.CommitAsync();
 
             // Publish RabbitMQ event
@@ -254,7 +306,7 @@ public class OrderService(
                 {
                     AccompanimentId = oia.AccompanimentId,
                     Name = oia.Accompaniment.Name,
-                    ExtraCharge = oia.PriceAtOrder // ✅ Koristi PriceAtOrder umjesto Accompaniment.ExtraCharge
+                    ExtraCharge = oia.PriceAtOrder
                 }).ToList()
             }).ToList()
         };
@@ -399,14 +451,70 @@ public class OrderService(
 
     public async Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status)
     {
-        var orderItem = await context.OrderItems.FindAsync(orderItemId);
+        var orderItem = await context.OrderItems
+            .Include(oi => oi.Order)
+                .ThenInclude(o => o.Items)
+            .FirstOrDefaultAsync(oi => oi.Id == orderItemId);
+            
         if (orderItem == null)
             throw new KeyNotFoundException($"Order item with ID {orderItemId} not found");
 
         orderItem.Status = status;
+
+        // ✅ UPDATE ORDER STATUS BASED ON ALL ITEMS
+        var order = orderItem.Order;
+        
+        // Get all item statuses (including the one we're updating)
+        var allItemsStatus = order.Items
+            .Select(i => i.Id == orderItemId ? status : i.Status)
+            .ToList();
+        
+        // Determine new order status based on all items
+        // Check if all non-cancelled items are ready
+        var activeItems = allItemsStatus.Where(s => s != OrderItemStatus.Cancelled).ToList();
+        
+        if (allItemsStatus.All(s => s == OrderItemStatus.Cancelled))
+        {
+            // All items cancelled → Cancel order
+            order.Status = OrderStatus.Cancelled;
+            order.UpdatedAt = DateTime.UtcNow;
+            logger.LogInformation("✅ Order {OrderId} status automatically set to Cancelled (all items cancelled)", order.Id);
+        }
+        else if (activeItems.Any() && activeItems.All(s => s == OrderItemStatus.Ready))
+        {
+            // All active items ready → Order ready
+            order.Status = OrderStatus.Ready;
+            order.UpdatedAt = DateTime.UtcNow;
+            logger.LogInformation("✅ Order {OrderId} status automatically set to Ready (all active items ready)", order.Id);
+        }
+        else if (activeItems.Any(s => s == OrderItemStatus.Preparing))
+        {
+            // Some items preparing → Order preparing
+            order.Status = OrderStatus.Preparing;
+            order.UpdatedAt = DateTime.UtcNow;
+            logger.LogInformation("✅ Order {OrderId} status automatically set to Preparing (some items preparing)", order.Id);
+        }
+        else if (activeItems.Any() && activeItems.All(s => s == OrderItemStatus.Pending))
+        {
+            // All active items pending → Order pending
+            order.Status = OrderStatus.Pending;
+            order.UpdatedAt = DateTime.UtcNow;
+        }
+
         await context.SaveChangesAsync();
 
+        // ✅ Notify all clients about status change (both item and order)
+        await hubContext.Clients.All.SendAsync("OrderItemStatusChanged", new
+        {
+            OrderItemId = orderItemId,
+            Status = status.ToString(),
+            OrderId = order.Id,
+            OrderStatus = order.Status.ToString(),
+            ChangedAt = DateTime.UtcNow
+        });
+
         logger.LogInformation("Order item {OrderItemId} status updated to {Status}", orderItemId, status);
+        logger.LogInformation("Order {OrderId} status is now {Status}", order.Id, order.Status);
     }
 
     public async Task CancelOrderAsync(Guid orderId, string reason)
@@ -479,6 +587,8 @@ public class OrderService(
     {
         var order = await context.Orders
             .Include(o => o.Items)
+            .Include(o => o.Waiter)
+            .Include(o => o.Table)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
@@ -498,7 +608,7 @@ public class OrderService(
         if (product.Stock < dto.Quantity)
             throw new InvalidOperationException($"Insufficient stock for {product.Name}");
 
-        // ✅ FIX: Dodana accompaniment validation
+        // Validate accompaniments
         if (dto.SelectedAccompanimentIds.Any())
         {
             var validationResult = await accompanimentService.ValidateSelectionAsync(
@@ -532,7 +642,7 @@ public class OrderService(
             CreatedAt = DateTime.UtcNow
         };
 
-        // ✅ FIX: Dodaj accompaniments sa PriceAtOrder
+        // Add accompaniments sa PriceAtOrder
         if (dto.SelectedAccompanimentIds.Any())
         {
             var accompaniments = await context.Accompaniments
@@ -568,7 +678,39 @@ public class OrderService(
         order.TotalAmount += subtotal;
         order.UpdatedAt = DateTime.UtcNow;
 
+        // ✅ Sačuvaj podatke PRIJE SaveChanges
+        var productName = product.Name;
+        var productLocation = product.Location;
+        var waiterName = order.Waiter.FullName;
+        var tableNumber = order.Table?.TableNumber;
+
         await context.SaveChangesAsync();
+
+        // ✅ Pošalji SignalR notifikaciju sa sačuvanim podacima
+        var notificationData = new
+        {
+            OrderItemId = orderItem.Id,
+            OrderId = orderId,
+            ProductName = productName,
+            Quantity = orderItem.Quantity,
+            TableNumber = tableNumber,
+            WaiterName = waiterName,
+            OrderType = order.Type.ToString(),
+            IsPartnerOrder = order.IsPartnerOrder,
+            Notes = orderItem.Notes,
+            CreatedAt = orderItem.CreatedAt
+        };
+
+        if (productLocation == PreparationLocation.Kitchen)
+        {
+            await hubContext.Clients.Group("Kitchen").SendAsync("NewKitchenOrder", notificationData);
+            logger.LogInformation("📨 SignalR: Sent NewKitchenOrder notification for added item {ItemId}", orderItem.Id);
+        }
+        else if (productLocation == PreparationLocation.Bar)
+        {
+            await hubContext.Clients.Group("Bartender").SendAsync("NewBarOrder", notificationData);
+            logger.LogInformation("📨 SignalR: Sent NewBarOrder notification for added item {ItemId}", orderItem.Id);
+        }
 
         logger.LogInformation("Item added to order {OrderId}: {ProductId} x{Quantity}", 
             orderId, dto.ProductId, dto.Quantity);
@@ -577,8 +719,8 @@ public class OrderService(
         {
             Id = orderItem.Id,
             ProductId = orderItem.ProductId,
-            ProductName = product.Name,
-            PreparationLocation = product.Location.ToString(),
+            ProductName = productName,
+            PreparationLocation = productLocation.ToString(),
             Quantity = orderItem.Quantity,
             UnitPrice = orderItem.UnitPrice,
             Subtotal = orderItem.Subtotal,
@@ -605,7 +747,11 @@ public class OrderService(
             .AsNoTracking()
             .Include(oi => oi.Product)
             .Include(oi => oi.Order)
+                .ThenInclude(o => o.Waiter)
+            .Include(oi => oi.Order)
                 .ThenInclude(o => o.Table)
+            .Include(oi => oi.OrderItemAccompaniments)
+                .ThenInclude(oia => oia.Accompaniment)
             .Where(oi => oi.Product.Location == location)
             .AsQueryable();
 
@@ -629,7 +775,13 @@ public class OrderService(
             Subtotal = i.Subtotal,
             Notes = i.Notes,
             Status = i.Status.ToString(),
-            CreatedAt = i.CreatedAt
+            CreatedAt = i.CreatedAt,
+            SelectedAccompaniments = i.OrderItemAccompaniments.Select(oia => new SelectedAccompanimentDto
+            {
+                AccompanimentId = oia.AccompanimentId,
+                Name = oia.Accompaniment.Name,
+                ExtraCharge = oia.PriceAtOrder
+            }).ToList()
         }).ToList();
     }
 }

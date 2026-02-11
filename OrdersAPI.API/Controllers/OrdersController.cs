@@ -10,7 +10,6 @@ namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpPost]
@@ -94,7 +93,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPut("items/{itemId}/status")]
-    [Authorize(Roles = "Admin,Bartender,Kitchen")]
+    [Authorize(Roles = "Waiter,Bartender,Kitchen,Admin")]  
     public async Task<IActionResult> UpdateOrderItemStatus(Guid itemId, [FromBody] UpdateOrderItemStatusDto dto)
     {
         var status = Enum.Parse<OrderItemStatus>(dto.Status);

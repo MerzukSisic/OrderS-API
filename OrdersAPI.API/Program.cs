@@ -9,6 +9,7 @@ using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Hubs;
 using OrdersAPI.Infrastructure.Messaging.Consumers;
 using OrdersAPI.Infrastructure.Services;
+using OrdersAPI.API.Middleware; // ✅ ADD THIS FOR GlobalExceptionHandler
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -128,10 +129,14 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IAccompanimentService, AccompanimentService>();
-builder.Services.AddScoped<IStoreService, StoreService>(); // ← DODAJ AKO FALI
+builder.Services.AddScoped<IStoreService, StoreService>();
 
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
+
+// ✅ GLOBAL EXCEPTION HANDLER
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // ==================== CORS (OPTIMIZED FOR DESKTOP) ====================
 builder.Services.AddCors(options =>
@@ -164,6 +169,11 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ==================== MIDDLEWARE PIPELINE ====================
+
+// ✅ 1. EXCEPTION HANDLER - MUST BE FIRST!
+app.UseExceptionHandler(options => { });
+
+// 2. Swagger (Development)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
