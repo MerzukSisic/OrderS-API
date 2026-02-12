@@ -2397,6 +2397,7 @@
           "Microsoft.EntityFrameworkCore.SqlServer": "9.0.0",
           "OrdersAPI.Application": "1.0.0",
           "OrdersAPI.Domain": "1.0.0",
+          "OrdersAPI.Worker": "1.0.0",
           "Stripe.net": "50.1.0"
         },
         "compile": {
@@ -2404,6 +2405,23 @@
         },
         "runtime": {
           "bin/placeholder/OrdersAPI.Infrastructure.dll": {}
+        }
+      },
+      "OrdersAPI.Worker/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "MassTransit.RabbitMQ": "8.3.3",
+          "Microsoft.EntityFrameworkCore.SqlServer": "9.0.0",
+          "Microsoft.Extensions.Hosting": "9.0.0",
+          "Microsoft.Extensions.Logging.Console": "9.0.0",
+          "OrdersAPI.Domain": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/OrdersAPI.Worker.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/OrdersAPI.Worker.dll": {}
         }
       }
     }
@@ -5960,6 +5978,11 @@
       "type": "project",
       "path": "../OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj",
       "msbuildProject": "../OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj"
+    },
+    "OrdersAPI.Worker/1.0.0": {
+      "type": "project",
+      "path": "../OrdersAPI.Worker/OrdersAPI.Worker.csproj",
+      "msbuildProject": "../OrdersAPI.Worker/OrdersAPI.Worker.csproj"
     }
   },
   "projectFileDependencyGroups": {

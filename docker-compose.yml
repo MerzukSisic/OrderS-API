@@ -1,6 +1,5 @@
-﻿version: '3.8'
-
-services:
+﻿services:
+  # ==================== RABBITMQ ====================
   rabbitmq:
     image: rabbitmq:3-management
     container_name: orders_rabbitmq
@@ -13,7 +12,13 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
+  # ==================== SQL SERVER ====================
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: orders_sqlserver
@@ -24,6 +29,59 @@ services:
       ACCEPT_EULA: "Y"
     volumes:
       - sqlserver_data:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/1433' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ==================== API (Glavni servis) ====================
+  orders-api:
+    build:
+      context: .
+      dockerfile: OrdersAPI.API/Dockerfile
+    container_name: orders_api
+    ports:
+      - "5220:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=MerzukSisic0603.;TrustServerCertificate=True;Encrypt=False;
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__User=guest
+      - RabbitMQ__Password=guest
+      - Jwt__Key=YourSuperSecretKeyForJWTTokenGeneration123456789012345678901234567890
+      - Jwt__Issuer=OrdersAPI
+      - Jwt__Audience=OrdersFlutterApp
+      - Stripe__SecretKey=sk_test_your_stripe_secret_key
+      - Stripe__PublishableKey=pk_test_your_stripe_publishable_key
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== WORKER (Pomoćni mikroservis) ====================
+  orders-worker:
+    build:
+      context: .
+      dockerfile: OrdersAPI.Worker/Dockerfile
+    container_name: orders_worker
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=MerzukSisic0603.;TrustServerCertificate=True;Encrypt=False;
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__User=guest
+      - RabbitMQ__Password=guest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

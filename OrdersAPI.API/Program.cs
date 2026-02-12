@@ -7,7 +7,6 @@ using Microsoft.IdentityModel.Tokens;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Hubs;
-using OrdersAPI.Infrastructure.Messaging.Consumers;
 using OrdersAPI.Infrastructure.Services;
 using OrdersAPI.API.Middleware; // ✅ ADD THIS FOR GlobalExceptionHandler
 
@@ -94,24 +93,20 @@ builder.Services.AddAutoMapper(typeof(OrdersAPI.Application.Mappings.MappingProf
 // ==================== MASSTRANSIT (RabbitMQ) ====================
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<OrderCreatedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
         var rabbitUser = builder.Configuration["RabbitMQ:User"] ?? "guest";
         var rabbitPassword = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        var rabbitPort = ushort.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
 
-        // ✅ FIX: Za lokalni development, koristi localhost umjesto Docker hostname
-        var effectiveHost = rabbitHost == "orders_rabbitmq" ? "localhost" : rabbitHost;
-
-        cfg.Host(effectiveHost, h =>
+        cfg.Host(rabbitHost, rabbitPort, "/", h =>
         {
             h.Username(rabbitUser);
             h.Password(rabbitPassword);
         });
 
-        cfg.ConfigureEndpoints(context);
     });
 });
 
@@ -174,15 +169,13 @@ using (var scope = app.Services.CreateScope())
 app.UseExceptionHandler(options => { });
 
 // 2. Swagger (Development)
-if (app.Environment.IsDevelopment())
+// 2. Swagger (Always enabled)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderS API v1");
-        c.RoutePrefix = "swagger"; // Access at http://localhost:5220/swagger
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderS API v1");
+    c.RoutePrefix = "swagger";
+});
 
 // ✅ HTTPS Redirect - Disabled for localhost development
 // app.UseHttpsRedirection(); 

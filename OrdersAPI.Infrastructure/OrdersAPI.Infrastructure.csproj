@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OrdersAPI.Application\OrdersAPI.Application.csproj" />
     <ProjectReference Include="..\OrdersAPI.Domain\OrdersAPI.Domain.csproj" />
+    <ProjectReference Include="..\OrdersAPI.Worker\OrdersAPI.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

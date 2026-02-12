@@ -8,7 +8,7 @@ using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Hubs;
-using OrdersAPI.Infrastructure.Messaging.Events;
+using OrdersAPI.Domain.Events;
 
 namespace OrdersAPI.Infrastructure.Services;
 
@@ -239,7 +239,7 @@ public class OrderService(
                 WaiterId = order.WaiterId,
                 TotalAmount = order.TotalAmount,
                 CreatedAt = order.CreatedAt,
-                Items = order.Items.Select(i => new OrderItemData
+                Items = order.Items.Select(i => new OrderItemEvent
                 {
                     ProductId = i.ProductId,
                     Quantity = i.Quantity,
