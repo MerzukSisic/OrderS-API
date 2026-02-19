@@ -232,6 +232,19 @@ public class OrderService(
 
             await transaction.CommitAsync();
 
+            // ✅ LOGIRAJ KOJE RAČUNE TREBA GENERISATI ZA OVU NARUDŽBU
+            var hasKitchenItems = order.Items.Any(i => i.Product.Location == PreparationLocation.Kitchen);
+            var hasBarItems = order.Items.Any(i => i.Product.Location == PreparationLocation.Bar);
+
+            var receiptTypes = new List<string>();
+            if (hasKitchenItems) receiptTypes.Add("Kitchen");
+            if (hasBarItems) receiptTypes.Add("Bar");
+            receiptTypes.Add("Customer"); // UVIJEK
+
+            logger.LogInformation(
+                "📄 Order {OrderId} receipts available: {ReceiptTypes}", 
+                order.Id, string.Join(", ", receiptTypes));
+            
             // Publish RabbitMQ event
             await publishEndpoint.Publish(new OrderCreatedEvent
             {

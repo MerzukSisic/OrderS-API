@@ -18,15 +18,13 @@ public class ReceiptsController(IReceiptService receiptService) : ControllerBase
     }
 
     [HttpGet("kitchen/{orderId}")]
-    [Authorize(Roles = "Admin,Kitchen")]
     public async Task<ActionResult<KitchenReceiptDto>> GetKitchenReceipt(Guid orderId)
     {
         var receipt = await receiptService.GenerateKitchenReceiptAsync(orderId);
         return Ok(receipt);
     }
 
-    [HttpGet("bar/{orderId}")]
-    [Authorize(Roles = "Admin,Bartender")]
+    [HttpGet("bar/{orderId}")] 
     public async Task<ActionResult<BarReceiptDto>> GetBarReceipt(Guid orderId)
     {
         var receipt = await receiptService.GenerateBarReceiptAsync(orderId);
