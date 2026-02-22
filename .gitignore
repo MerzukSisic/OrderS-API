@@ -53,7 +53,7 @@ Thumbs.db
 # Env / Secrets (zipovana verzija ostaje)
 # ============================================
 .env
-appsettings.*.Local.json
+appsettings.*.json
 *.pem
 *.pfx
 
