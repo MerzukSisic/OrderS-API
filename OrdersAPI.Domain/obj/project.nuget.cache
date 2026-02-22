@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "9gpL2Q3dcaw=",
+  "dgSpecHash": "Z7wzOl3IOfg=",
   "success": true,
-  "projectFilePath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj",
-  "expectedPackageFiles": [],
+  "projectFilePath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Merzuk-PC\\.nuget\\packages\\microsoft.netcore.app.ref\\9.0.12\\microsoft.netcore.app.ref.9.0.12.nupkg.sha512",
+    "C:\\Users\\Merzuk-PC\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\9.0.12\\microsoft.windowsdesktop.app.ref.9.0.12.nupkg.sha512",
+    "C:\\Users\\Merzuk-PC\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\9.0.12\\microsoft.aspnetcore.app.ref.9.0.12.nupkg.sha512"
+  ],
   "logs": []
 }

@@ -1,36 +1,43 @@
 {
   "format": 1,
   "restore": {
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/OrdersAPI.Tests.csproj": {}
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Tests\\OrdersAPI.Tests.csproj": {}
   },
   "projects": {
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/OrdersAPI.API.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\OrdersAPI.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/OrdersAPI.API.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\OrdersAPI.API.csproj",
         "projectName": "OrdersAPI.API",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/OrdersAPI.API.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\OrdersAPI.API.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj"
               }
             }
           }
@@ -79,6 +86,24 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.AspNetCore.App": {
               "privateAssets": "none"
@@ -87,34 +112,41 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj",
         "projectName": "OrdersAPI.Application",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj"
               }
             }
           }
@@ -179,31 +211,52 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj",
         "projectName": "OrdersAPI.Domain",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -238,45 +291,66 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj",
         "projectName": "OrdersAPI.Infrastructure",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/OrdersAPI.Worker.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/OrdersAPI.Worker.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\OrdersAPI.Worker.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\OrdersAPI.Worker.csproj"
               }
             }
           }
@@ -349,48 +423,69 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/OrdersAPI.Tests.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Tests\\OrdersAPI.Tests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/OrdersAPI.Tests.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Tests\\OrdersAPI.Tests.csproj",
         "projectName": "OrdersAPI.Tests",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/OrdersAPI.Tests.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Tests/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Tests\\OrdersAPI.Tests.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Tests\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/OrdersAPI.API.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.API/OrdersAPI.API.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\OrdersAPI.API.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.API\\OrdersAPI.API.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Application/OrdersAPI.Application.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Application\\OrdersAPI.Application.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj"
               },
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Infrastructure/OrdersAPI.Infrastructure.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Infrastructure\\OrdersAPI.Infrastructure.csproj"
               }
             }
           }
@@ -457,39 +552,60 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/OrdersAPI.Worker.csproj": {
+    "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\OrdersAPI.Worker.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/OrdersAPI.Worker.csproj",
+        "projectUniqueName": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\OrdersAPI.Worker.csproj",
         "projectName": "OrdersAPI.Worker",
-        "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/OrdersAPI.Worker.csproj",
-        "packagesPath": "/Users/merzuksisic/.nuget/packages/",
-        "outputPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Worker/obj/",
+        "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\OrdersAPI.Worker.csproj",
+        "packagesPath": "C:\\Users\\Merzuk-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Worker\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/Users/merzuksisic/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Merzuk-PC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj": {
-                "projectPath": "/Users/merzuksisic/Desktop/rs2-back/OrdersAPI.Domain/OrdersAPI.Domain.csproj"
+              "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj": {
+                "projectPath": "C:\\Users\\Merzuk-PC\\Desktop\\OrdersAPI\\OrdersAPI.Domain\\OrdersAPI.Domain.csproj"
               }
             }
           }
@@ -538,12 +654,30 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.12, 9.0.12]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.101/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

@@ -1,11 +1,12 @@
 ﻿services:
+
   # ==================== RABBITMQ ====================
   rabbitmq:
     image: rabbitmq:3-management
     container_name: orders_rabbitmq
     ports:
-      - "5672:5672"    # AMQP port
-      - "15672:15672"  # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -25,13 +26,13 @@
     ports:
       - "1433:1433"
     environment:
-      SA_PASSWORD: "MerzukSisic0603."
+      SA_PASSWORD: ${SA_PASSWORD}
       ACCEPT_EULA: "Y"
     volumes:
       - sqlserver_data:/var/opt/mssql
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/1433' || exit 1" ]
+      test: ["CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/1433' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -48,16 +49,17 @@
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=MerzukSisic0603.;TrustServerCertificate=True;Encrypt=False;
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Port=5672
       - RabbitMQ__User=guest
       - RabbitMQ__Password=guest
-      - Jwt__Key=YourSuperSecretKeyForJWTTokenGeneration123456789012345678901234567890
+      - Jwt__Key=${JWT_KEY}
       - Jwt__Issuer=OrdersAPI
       - Jwt__Audience=OrdersFlutterApp
-      - Stripe__SecretKey=sk_test_your_stripe_secret_key
-      - Stripe__PublishableKey=pk_test_your_stripe_publishable_key
+      - Stripe__SecretKey=${STRIPE_SECRET_KEY}
+      - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -72,7 +74,7 @@
       dockerfile: OrdersAPI.Worker/Dockerfile
     container_name: orders_worker
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=MerzukSisic0603.;TrustServerCertificate=True;Encrypt=False;
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=OrdersDB;User Id=SA;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Port=5672
       - RabbitMQ__User=guest

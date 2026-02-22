@@ -30,7 +30,7 @@ CREATE TABLE Users (
                        FullName NVARCHAR(200) NOT NULL,
                        Email NVARCHAR(200) NOT NULL UNIQUE,
                        PasswordHash NVARCHAR(500) NOT NULL,
-                       Role NVARCHAR(50) NOT NULL CHECK (Role IN ('Admin', 'Waiter', 'Bartender')),
+Role NVARCHAR(50) NOT NULL CHECK (Role IN ('Admin', 'Waiter', 'Bartender', 'Chef')),
                        PhoneNumber NVARCHAR(50) NULL,
                        IsActive BIT NOT NULL DEFAULT 1,
                        CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
@@ -304,6 +304,7 @@ DECLARE @AdminId UNIQUEIDENTIFIER = NEWID();
 DECLARE @WaiterId1 UNIQUEIDENTIFIER = NEWID();
 DECLARE @WaiterId2 UNIQUEIDENTIFIER = NEWID();
 DECLARE @BartenderId UNIQUEIDENTIFIER = NEWID();
+DECLARE @ChefId UNIQUEIDENTIFIER = NEWID();
 DECLARE @CategoryDrinks UNIQUEIDENTIFIER = NEWID();
 DECLARE @CategoryFood UNIQUEIDENTIFIER = NEWID();
 DECLARE @CategoryDesserts UNIQUEIDENTIFIER = NEWID();
@@ -327,12 +328,13 @@ DECLARE @SampleOrderId UNIQUEIDENTIFIER = NEWID();
 
 -- Users (password: "password123" - BCrypt hashed)
 INSERT INTO Users (Id, FullName, Email, PasswordHash, Role, PhoneNumber, IsActive)
-VALUES
-    (@AdminId, 'Admin User', 'admin@orders.com', '$2a$11$xKZQJhQnVvqz3jyOdH3rAeYpJh5L7KzP8YFGMvXVJ3bJGJzQZrJBe', 'Admin', '+387 61 123 456', 1),
-    (@WaiterId1, 'Marko Marković', 'marko@orders.com', '$2a$11$xKZQJhQnVvqz3jyOdH3rAeYpJh5L7KzP8YFGMvXVJ3bJGJzQZrJBe', 'Waiter', '+387 61 234 567', 1),
-    (@WaiterId2, 'Ana Anić', 'ana@orders.com', '$2a$11$xKZQJhQnVvqz3jyOdH3rAeYpJh5L7KzP8YFGMvXVJ3bJGJzQZrJBe', 'Waiter', '+387 61 345 678', 1),
-    (@BartenderId, 'Petar Petrović', 'petar@orders.com', '$2a$11$xKZQJhQnVvqz3jyOdH3rAeYpJh5L7KzP8YFGMvXVJ3bJGJzQZrJBe', 'Bartender', '+387 61 456 789', 1);
-
+VALUES 
+    (@AdminId, 'Admin User', 'admin@orders.com', '$2a$12$4NF9SoLc3hYd/Sdl9foyuuvQiCJAc4zaFvC6.YPyfN0145e6tvlli', 'Admin', '+387 61 123 456', 1),
+    (@WaiterId1, 'Konobar Jedan', 'marko@orders.com', '$2a$12$4NF9SoLc3hYd/Sdl9foyuuvQiCJAc4zaFvC6.YPyfN0145e6tvlli', 'Waiter', '+387 61 234 567', 1),
+    (@WaiterId2, 'Konobar Dva', 'ana@orders.com', '$2a$12$4NF9SoLc3hYd/Sdl9foyuuvQiCJAc4zaFvC6.YPyfN0145e6tvlli', 'Waiter', '+387 61 345 678', 1),
+    (@BartenderId, 'Sanker Jedan', 'petar@orders.com', '$2a$12$4NF9SoLc3hYd/Sdl9foyuuvQiCJAc4zaFvC6.YPyfN0145e6tvlli', 'Bartender', '+387 61 456 789', 1),
+    (@ChefId, 'Kuhar Jedan', 'chef@orders.com', '$2a$12$4NF9SoLc3hYd/Sdl9foyuuvQiCJAc4zaFvC6.YPyfN0145e6tvlli', 'Chef', '+387 61 567 890', 1);
+GO
 -- Categories
 INSERT INTO Categories (Id, Name, Description, IconName)
 VALUES

@@ -1,4 +1,4 @@
-# OrderS - Sistem za upravljanje narudžbama u kafiću
+# OrderS — Backend API
 **Autor:** Merzuk Šišić (IB220060)  
 **Predmet:** Razvoj softvera II  
 **Akademska godina:** 2024/2025
@@ -11,77 +11,64 @@
 3. [Mikroservisna arhitektura](#mikroservisna-arhitektura)
 4. [Pokretanje projekta](#pokretanje-projekta)
 5. [Login podaci](#login-podaci)
-6. [Build aplikacija](#build-aplikacija)
-7. [Sistem preporuke](#sistem-preporuke)
+6. [Sistem preporuke](#sistem-preporuke)
+7. [Baza podataka](#baza-podataka)
+8. [Struktura projekta](#struktura-projekta)
 
 ---
 
 ## 🎯 Opis projekta
-OrderS je kompletan informacioni sistem za upravljanje narudžbama u kafiću koji obuhvata:
-- **Mobilnu aplikaciju** (Flutter) za konobare, šankere i administratore
-- **Desktop aplikaciju** (Flutter) za administrativne funkcije
-- **.NET 9 backend API** sa Clean Architecture
-- **Worker servis** za asinhronu obradu narudžbi
+
+OrderS je kompletan informacioni sistem za upravljanje narudžbama u kafiću. Ovaj repozitorij sadrži **.NET 9 backend** koji se sastoji od dva servisa — glavnog API servisa i Worker mikroservisa.
 
 ### Ključne funkcionalnosti:
-- ✅ Kreiranje narudžbi sa automatskim razdvajanjem (kuhinja/šank)
-- ✅ Upravljanje proizvodima sa sastojcima i prilozima
+- ✅ REST API sa Clean Architecture i CQRS (MediatR)
 - ✅ Automatsko smanjenje inventara nakon narudžbe
-- ✅ Nabavka artikala sa Stripe plaćanjem
+- ✅ Nabavka artikala sa Stripe plaćanjem i webhook podrškom
 - ✅ Real-time notifikacije putem SignalR
-- ✅ Dashboard sa statistikama i izvještajima
-- ✅ Sistem preporuke proizvoda
-- ✅ Generisanje računa za goste i interno
+- ✅ Event-driven komunikacija putem RabbitMQ
+- ✅ Sistem preporuke proizvoda (Hybrid Recommender)
+- ✅ Generisanje računa za goste, kuhinju i šank
+
+### Povezani repozitoriji:
+- 📱 **Mobile aplikacija:** [orders_mobile repo]
+- 🖥️ **Desktop aplikacija:** [rs2-desktop repo]
 
 ---
 
 ## 🛠️ Tehnologije
 
-### Backend:
-- **.NET 9** - Web API
-- **Entity Framework Core** - ORM
-- **SQL Server** - Baza podataka
-- **MassTransit + RabbitMQ** - Messaging
-- **AutoMapper** - Object mapping
-- **JWT** - Autentifikacija
-- **Stripe** - Payment processing
-
-### Frontend:
-- **Flutter 3.19+** - Mobile & Desktop
-- **Provider** - State management
-- **Dio** - HTTP client
-- **shared_preferences** - Local storage
-
-### Infrastructure:
-- **Docker & Docker Compose**
-- **RabbitMQ** - Message broker
-- **SQL Server 2022**
+- **.NET 9** — Web API, Clean Architecture, CQRS (MediatR)
+- **Entity Framework Core** — ORM, Code First
+- **SQL Server 2022** — Baza podataka
+- **MassTransit + RabbitMQ** — Event-driven messaging
+- **SignalR** — Real-time komunikacija
+- **JWT** — Autentifikacija s role-based access control
+- **Stripe** — Payment processing + webhook
+- **Docker & Docker Compose** — Orkestracija servisa
+- **BCrypt** — Hashovanje lozinki
+- **FluentValidation** — Validacija DTO-ova
+- **AutoMapper** — Object mapping
 
 ---
 
 ## 🏗️ Mikroservisna arhitektura
 
-Projekat implementira **mikroservisnu arhitekturu** sa:
+Projekat implementira event-driven mikroservisnu arhitekturu s četiri Docker kontejnera:
 
-### 1. **Glavni servis (API)** - `orders-api`
-- REST API za frontend aplikacije
-- Obrada HTTP zahtjeva
-- JWT autentifikacija
-- Slanje poruka na RabbitMQ
+| Kontejner | Opis | Port |
+|---|---|---|
+| `orders_api` | Glavni REST API servis | 5220 |
+| `orders_worker` | Worker mikroservis — prima OrderCreatedEvent iz RabbitMQ | — |
+| `orders_sqlserver` | SQL Server 2022 | 1433 |
+| `orders_rabbitmq` | RabbitMQ message broker | 5672 / 15672 |
 
-### 2. **Pomoćni servis (Worker)** - `orders-worker`
-- **Odvojen kontejner/projekat** ✅
-- Prima poruke iz RabbitMQ
-- Logira detalje narudžbi
-- Izvršava asinhrone zadatke
-- Omogućava skaliranje
-
-### Komunikacija:
+### Tok poruka:
 ```
-Frontend → API → RabbitMQ → Worker
+Flutter App → API → RabbitMQ → Worker
 ```
 
-**VAŽNO:** Worker servis je potpuno odvojen projekat (`OrdersAPI.Worker`) sa vlastitim Dockerfile-om i kontejnerom, što zadovoljava zahtjeve za mikroservisnom arhitekturom.
+**Worker servis** (`OrdersAPI.Worker`) je potpuno odvojen projekat s vlastitim Dockerfile-om i kontejnerom. Prima `OrderCreatedEvent` poruke, vrši logiranje i asinhrone zadatke.
 
 ---
 
@@ -89,268 +76,123 @@ Frontend → API → RabbitMQ → Worker
 
 ### Preduvjeti:
 - Docker Desktop
-- Android Studio (za AVD emulator)
-- Git
 
 ### Koraci:
 
 #### 1. Clone repozitorija
 ```bash
-git clone https://github.com/YOUR_USERNAME/OrderS.git
-cd OrderS
+git clone <URL_OVOG_REPOA>
+cd OrdersAPI
 ```
 
-#### 2. Pokretanje backend servisa
+#### 2. Konfiguracija
+Zipovani `.env.zip` fajl se nalazi u root folderu. Ekstraktovati s šifrom `fit`:
+```bash
+7z x .env.zip
+```
+
+#### 3. Pokretanje
 ```bash
 docker-compose up --build
 ```
 
-**Ovo pokreće:**
-- ✅ SQL Server (port 1433)
-- ✅ RabbitMQ (port 5672, Management UI: 15672)
-- ✅ OrderS API (port 5220)
-- ✅ OrderS Worker (background servis)
+Pokretanjem se automatski:
+- Kreira SQL Server baza `OrdersDB`
+- Seeduju testni podaci (korisnici, proizvodi, stolovi)
+- Pokreće RabbitMQ s management UI-om
+- Pokreće API i Worker servis
 
-**Provjerite da li su servisi pokrenuti:**
+#### 4. Provjera
 ```bash
 docker ps
 ```
-
-Trebate vidjeti 4 kontejnera:
-- `orders_sqlserver`
-- `orders_rabbitmq`
-- `orders_api`
-- `orders_worker`
-
-#### 3. Pokretanje Desktop aplikacije
-```bash
-cd OrdersFlutterDesktop
-# Ekstraktujte build ako je zipovan (šifra: fit)
-unzip fit-build-*.zip
-
-# Pokrenite .exe (Windows)
-cd build/windows/x64/runner/Release/
-./orders_flutter_desktop.exe
-```
-
-#### 4. Pokretanje Mobile aplikacije (Android)
-```bash
-# Otvorite Android Studio → Device Manager → Start AVD emulator
-
-# Instalirajte APK
-cd OrdersFlutterMobile/build/app/outputs/flutter-apk/
-adb install app-release.apk
-
-# Ili drag & drop APK fajl u emulator
-```
+Trebaju biti vidljiva 4 kontejnera: `orders_sqlserver`, `orders_rabbitmq`, `orders_api`, `orders_worker`.
 
 ---
 
 ## 🔐 Login podaci
 
-### Desktop aplikacija:
-```
-Username: desktop
-Password: test
-```
-
-### Mobile aplikacija:
-
-**Admin:**
-```
-Username: admin
-Password: test
-Role: Admin
-```
-
-**Konobar:**
-```
-Username: mobile
-Password: test
-Role: Waiter
-```
-
-**Šanker:**
-```
-Username: bartender
-Password: test
-Role: Bartender
-```
-
----
-
-## 📦 Build aplikacija
-
-### Android APK (Mobile):
-```bash
-flutter clean
-flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:5220/api
-```
-**Lokacija:** `build/app/outputs/flutter-apk/app-release.apk`
-
-### Windows EXE (Desktop):
-```bash
-flutter clean
-flutter build windows --release
-```
-**Lokacija:** `build/windows/x64/runner/Release/`
-
-**ZIP arhiva:** Ako je build folder veći od 100MB, zipovan je sa split opcijom (90MB chunks) i šifrom **"fit"**.
-
-Ekstraktovanje:
-```bash
-# Windows (7-Zip)
-7z x fit-build-2025-02-12.zip
-
-# Linux/Mac
-7z x fit-build-2025-02-12.zip
-```
+| Email | Lozinka | Uloga |
+|---|---|---|
+| admin@orders.com | password123 | Admin |
+| marko@orders.com | password123 | Waiter |
+| ana@orders.com | password123 | Bartender |
+| kuhar@orders.com | password123 | Kitchen |
 
 ---
 
 ## 🤖 Sistem preporuke
 
-Projekat implementira **hybrid recommendation system** koji kombinuje:
-1. **Collaborative Filtering** - preporuke na osnovu historije korisnika
-2. **Content-Based Filtering** - preporuke sličnih proizvoda
-3. **Popularity-Based** - najprodavaniji proizvodi
+Implementiran je **hibridni sistem preporuke** koji kombinuje tri algoritma:
+
+1. **Time-Based Filtering** — preporuke prema trenutnom dijelu dana (doručak/ručak/poslijepodne/večer)
+2. **Popularity-Based Filtering** — najprodavaniji proizvodi u posljednjih 30 dana
+3. **User-Based Collaborative Filtering** — preporuke na osnovu historije sličnih korisnika
 
 ### Lokacija implementacije:
-- **Backend:** `OrdersAPI/Infrastructure/Services/RecommendationService.cs`
-- **Dokumentacija:** `recommender-dokumentacija.pdf` (root folder)
+- `OrdersAPI/Infrastructure/Services/RecommendationService.cs`
+- `OrdersAPI/API/Controllers/RecommendationsController.cs`
 
-### Endpoint:
+### API endpointi:
 ```
-GET /api/Recommendations?userId={guid}
+GET /api/Recommendations            # Hibridne personalizirane preporuke (JWT)
+GET /api/Recommendations/popular    # Top 10 najpopularnijih (javni)
+GET /api/Recommendations/time-based # Preporuke po vremenu (javni)
 ```
 
-**Detalji implementacije:**
-Pogledajte `recommender-dokumentacija.pdf` za:
-- Opis algoritma
-- Screenshots koda
-- Screenshots iz aplikacije
+Detaljna dokumentacija algoritma: `recommender-dokumentacija.pdf` (root folder).
+
+---
+
+## 📊 Baza podataka
+
+SQL Server 2022 s 15 tabela:
+
+`Users`, `Orders`, `OrderItems`, `OrderItemAccompaniments`, `Products`, `ProductIngredients`, `Categories`, `CafeTables`, `AccompanimentGroups`, `Accompaniments`, `StoreProducts`, `Stores`, `ProcurementOrders`, `ProcurementOrderItems`, `InventoryLogs`, `Notifications`
+
+Baza se kreira i seeduje automatski pri prvom pokretanju putem `DbInitializer`.
 
 ---
 
 ## 📁 Struktura projekta
 
 ```
-OrderS/
-├── OrdersAPI/                    # Glavni API servis
-│   ├── Controllers/
-│   ├── Application/
-│   ├── Domain/
-│   ├── Infrastructure/
-│   ├── Dockerfile
-│   └── appsettings.json
-├── OrdersAPI.Worker/             # Worker mikroservis (ODVOJEN!)
+OrdersAPI/
+├── OrdersAPI.API/                  # Presentation layer — Controllers, Middleware
+│   └── Controllers/
+├── OrdersAPI.Application/          # Application layer — DTOs, Interfaces, Validators
+│   ├── DTOs/
+│   ├── Interfaces/
+│   └── Validators/
+├── OrdersAPI.Domain/               # Domain layer — Entities, Enums
+│   ├── Entities/
+│   └── Enums/
+├── OrdersAPI.Infrastructure/       # Infrastructure layer — Services, DbContext
+│   ├── Data/
+│   └── Services/
+├── OrdersAPI.Worker/               # Worker mikroservis (odvojen projekat)
 │   ├── Consumers/
-│   ├── Events/
-│   ├── Dockerfile
-│   └── appsettings.json
-├── OrdersFlutterMobile/          # Flutter mobile app
-│   └── build/app/outputs/flutter-apk/app-release.apk
-├── OrdersFlutterDesktop/         # Flutter desktop app
-│   └── build/windows/x64/runner/Release/
-├── docker-compose.yml            # Orchestracija svih servisa
-├── recommender-dokumentacija.pdf # Dokumentacija sistema preporuke
-└── README.md                     # Ovaj fajl
+│   └── Events/
+├── docker-compose.yml
+├── recommender-dokumentacija.pdf
+└── .env.zip                        # Konfiguracijski fajl (šifra: fit)
 ```
-
----
-
-## 🎨 UI/UX Features
-
-- ✅ Moderan, konzistentan dark theme dizajn
-- ✅ Intuitivna navigacija
-- ✅ Real-time order status updates
-- ✅ Receipt generation (PDF)
-- ✅ Advanced filtering i sorting
-- ✅ Responsive layouts
-- ✅ Error handling sa jasnim porukama
-
----
-
-## 📊 Baza podataka
-
-**Tabele (15 poslovnih):**
-1. Users
-2. Orders
-3. OrderItems
-4. OrderItemAccompaniments
-5. Products
-6. ProductIngredients
-7. Categories
-8. Tables (CafeTable)
-9. AccompanimentGroups
-10. Accompaniments
-11. StoreProducts
-12. Stores
-13. ProcurementOrders
-14. ProcurementOrderItems
-15. InventoryLog
-16. Notifications
-
-**Referentne tabele nisu uračunate.**
 
 ---
 
 ## 🔍 Testiranje
 
-### API Endpoints:
-Swagger UI dostupan na:
+**Swagger UI:**
 ```
 http://localhost:5220/swagger
 ```
 
-### RabbitMQ Management:
+**RabbitMQ Management:**
 ```
 http://localhost:15672
-Username: guest
-Password: guest
+Username: guest / Password: guest
 ```
 
 ---
 
-## 📝 Napomene
-
-### Konfiguracijski podaci:
-- ✅ Svi konfiguracijski podaci su u `appsettings.json` i `.env` fajlovima
-- ✅ **NEMA** hardkodiranih stringova u kodu
-- ✅ Flutter API adresa konfigurisana putem `Environment.apiBaseUrl`
-
-### Worker servis:
-- ✅ Potpuno odvojen projekat (`OrdersAPI.Worker`)
-- ✅ Zasebni Dockerfile
-- ✅ Vlastiti kontejner u docker-compose
-- ✅ Prima poruke iz RabbitMQ
-- ✅ Izvršava asinhrone zadatke
-
-### Build fajlovi:
-- ✅ Windows: `fit-build-2025-02-12.zip` (split arhiva, šifra: "fit")
-- ✅ Android: `app-release.apk`
-- ✅ Svi build fajlovi commitovani u repozitorij
-
----
-
-## 👨‍💻 Autor
-
-**Merzuk Šišić**  
-Broj indeksa: IB220060  
-Email: merzuk.sisic@edu.fit.ba
-
----
-
-## 📄 Licenca
-
-Ovaj projekat je kreiran za potrebe kolegija Razvoj softvera II na Fakultetu informacijskih tehnologija (FIT), Univerzitet u Mostaru.
-
----
-
-## 🙏 Zahvalnice
-
-Zahvaljujem se profesorima i asistentima na FIT-u na podršci i smjernicama tokom razvoja ovog projekta.
-
----
-
-**Napomena:** Za dodatna pitanja ili probleme, kontaktirajte autora putem email-a ili preko DL sistema.
+*OrderS — RS2 2024/2025 — Merzuk Šišić — IB220060*

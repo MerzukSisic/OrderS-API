@@ -86,7 +86,15 @@ public static class DbInitializer
                 Email = "ana@orders.com",
                 PasswordHash = passwordHash,
                 Role = UserRole.Bartender
-            }
+            },
+            new User 
+            { 
+                Id = Guid.NewGuid(), 
+                FullName = "Kuhar Jedan", 
+                Email = "kuhar@orders.com",
+                PasswordHash = passwordHash,
+                Role = UserRole.Kitchen
+            },
         };
         context.Users.AddRange(users);
         context.SaveChanges();
