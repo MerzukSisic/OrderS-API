@@ -18,6 +18,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
                 Name = s.Name,
                 Description = s.Description,
                 Address = s.Address,
+                IsExternal = s.IsExternal,
                 CreatedAt = s.CreatedAt,
                 TotalProducts = s.StoreProducts.Count,
                 LowStockProductsCount = s.StoreProducts.Count(p => p.CurrentStock < p.MinimumStock)
@@ -40,6 +41,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
             Name = store.Name,
             Description = store.Description,
             Address = store.Address,
+            IsExternal = store.IsExternal,
             CreatedAt = store.CreatedAt,
             TotalProducts = store.StoreProducts.Count,
             LowStockProductsCount = store.StoreProducts.Count(p => p.CurrentStock < p.MinimumStock)
@@ -53,6 +55,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
             Name = dto.Name,
             Description = dto.Description,
             Address = dto.Address,
+            IsExternal = dto.IsExternal,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -76,6 +79,9 @@ public class StoreService(ApplicationDbContext context) : IStoreService
 
         if (dto.Address != null)
             store.Address = dto.Address;
+
+        if (dto.IsExternal.HasValue)
+            store.IsExternal = dto.IsExternal.Value;
 
         await context.SaveChangesAsync();
     }

@@ -286,6 +286,8 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
             return;
         }
 
+        var lowStockProducts = new List<StoreProduct>();
+
         foreach (var ingredient in product.ProductIngredients)
         {
             // Calculate required quantity (decimal from recipe * order quantity)
@@ -331,6 +333,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
                         storeProduct.Unit,
                         storeProduct.MinimumStock,
                         storeProduct.Unit);
+                    lowStockProducts.Add(storeProduct);
                 }
             }
             else
@@ -349,5 +352,34 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         }
 
         await context.SaveChangesAsync();
+
+        if (lowStockProducts.Count > 0)
+        {
+            var adminIds = await context.Users
+                .Where(u => u.IsActive && u.Role == UserRole.Admin)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            var notifications = new List<Notification>();
+            foreach (var sp in lowStockProducts)
+            {
+                foreach (var adminId in adminIds)
+                {
+                    notifications.Add(new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = adminId,
+                        Title = $"Low Stock: {sp.Name}",
+                        Message = $"{sp.Name} has fallen below minimum stock level. Current: {sp.CurrentStock} {sp.Unit}, Minimum: {sp.MinimumStock} {sp.Unit}.",
+                        Type = NotificationType.LowStock,
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            context.Notifications.AddRange(notifications);
+            await context.SaveChangesAsync();
+        }
     }
 }

@@ -29,6 +29,7 @@ public class ProcurementService : IProcurementService
         var query = _context.ProcurementOrders
             .AsNoTracking()
             .Include(p => p.Store)
+            .Include(p => p.SourceStore)
             .Include(p => p.Items)
                 .ThenInclude(i => i.StoreProduct)
             .AsQueryable();
@@ -43,6 +44,8 @@ public class ProcurementService : IProcurementService
                 Id = p.Id,
                 StoreId = p.StoreId,
                 StoreName = p.Store.Name,
+                SourceStoreId = p.SourceStoreId,
+                SourceStoreName = p.SourceStore != null ? p.SourceStore.Name : null,
                 Supplier = p.Supplier,
                 TotalAmount = p.TotalAmount,
                 Status = p.Status.ToString(),
@@ -70,6 +73,7 @@ public class ProcurementService : IProcurementService
         var order = await _context.ProcurementOrders
             .AsNoTracking()
             .Include(p => p.Store)
+            .Include(p => p.SourceStore)
             .Include(p => p.Items)
                 .ThenInclude(i => i.StoreProduct)
             .Select(p => new ProcurementOrderDto
@@ -77,6 +81,8 @@ public class ProcurementService : IProcurementService
                 Id = p.Id,
                 StoreId = p.StoreId,
                 StoreName = p.Store.Name,
+                SourceStoreId = p.SourceStoreId,
+                SourceStoreName = p.SourceStore != null ? p.SourceStore.Name : null,
                 Supplier = p.Supplier,
                 TotalAmount = p.TotalAmount,
                 Status = p.Status.ToString(),
@@ -108,10 +114,20 @@ public class ProcurementService : IProcurementService
         if (!storeExists)
             throw new KeyNotFoundException($"Store with ID {dto.StoreId} not found");
 
+        bool sourceStoreIsInternal = false;
+        if (dto.SourceStoreId.HasValue)
+        {
+            var sourceStore = await _context.Stores.FindAsync(dto.SourceStoreId.Value);
+            if (sourceStore == null)
+                throw new KeyNotFoundException($"Source store with ID {dto.SourceStoreId} not found");
+            sourceStoreIsInternal = !sourceStore.IsExternal;
+        }
+
         var procurement = new ProcurementOrder
         {
             Id = Guid.NewGuid(),
             StoreId = dto.StoreId,
+            SourceStoreId = dto.SourceStoreId,
             Supplier = dto.Supplier,
             Status = ProcurementStatus.Pending,
             OrderDate = DateTime.UtcNow,
@@ -126,7 +142,14 @@ public class ProcurementService : IProcurementService
             if (storeProduct == null)
                 throw new KeyNotFoundException($"Store product with ID {itemDto.StoreProductId} not found");
 
-            // ✅ FIX: Use unitCost from DTO if provided, otherwise fallback to PurchasePrice
+            // If ordering from an internal source store, check available stock
+            if (sourceStoreIsInternal)
+            {
+                if (storeProduct.CurrentStock < itemDto.Quantity)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock for '{storeProduct.Name}'. Available: {storeProduct.CurrentStock}, Requested: {itemDto.Quantity}");
+            }
+
             var unitCost = itemDto.UnitCost ?? storeProduct.PurchasePrice;
             var subtotal = unitCost * itemDto.Quantity;
             totalAmount += subtotal;
@@ -136,16 +159,31 @@ public class ProcurementService : IProcurementService
                 Id = Guid.NewGuid(),
                 StoreProductId = itemDto.StoreProductId,
                 Quantity = itemDto.Quantity,
-                UnitCost = unitCost,  // ✅ Use resolved unitCost (not nullable)
+                UnitCost = unitCost,
                 Subtotal = subtotal
             });
         }
 
         procurement.TotalAmount = totalAmount;
         _context.ProcurementOrders.Add(procurement);
+
+        // Log that a procurement order was placed (before any stock movement)
+        foreach (var item in procurement.Items)
+        {
+            _context.InventoryLogs.Add(new InventoryLog
+            {
+                Id = Guid.NewGuid(),
+                StoreProductId = item.StoreProductId,
+                QuantityChange = 0,
+                Type = InventoryLogType.Adjustment,
+                Reason = $"Procurement order placed (Order ID: {procurement.Id}, Qty requested: {item.Quantity})",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Procurement order {OrderId} created for store {StoreId} with {ItemCount} items", 
+        _logger.LogInformation("Procurement order {OrderId} created for store {StoreId} with {ItemCount} items",
             procurement.Id, dto.StoreId, procurement.Items.Count);
 
         return await GetProcurementOrderByIdAsync(procurement.Id);
@@ -178,6 +216,8 @@ public class ProcurementService : IProcurementService
     public async Task ConfirmPaymentAsync(Guid procurementOrderId, string paymentIntentId)
     {
         var order = await _context.ProcurementOrders
+            .Include(o => o.Items)
+                .ThenInclude(i => i.StoreProduct)
             .FirstOrDefaultAsync(o => o.Id == procurementOrderId);
 
         if (order == null)
@@ -189,24 +229,24 @@ public class ProcurementService : IProcurementService
         order.Status = ProcurementStatus.Paid;
         order.StripePaymentIntentId = paymentIntentId;
         await _context.SaveChangesAsync();
-    
+
         _logger.LogInformation($"✅ Payment {paymentIntentId} auto-approved for order {procurementOrderId}");
         return;
 #endif
 
         // PRODUCTION: Verify with Stripe
         var paymentIntent = await _stripeService.GetPaymentIntentAsync(paymentIntentId);
-    
+
         if (paymentIntent.Status != "succeeded")
         {
             _logger.LogError($"❌ Payment intent {paymentIntentId} status: {paymentIntent.Status}");
             throw new InvalidOperationException($"Payment failed or not confirmed with Stripe. Status: {paymentIntent.Status}");
         }
-    
+
         order.Status = ProcurementStatus.Paid;
         order.StripePaymentIntentId = paymentIntentId;
         await _context.SaveChangesAsync();
-    
+
         _logger.LogInformation($"✅ Payment confirmed for procurement order {procurementOrderId}");
     }
 
@@ -250,20 +290,46 @@ public class ProcurementService : IProcurementService
                     $"Received quantity ({receivedItem.ReceivedQuantity}) cannot exceed ordered quantity ({orderItem.Quantity})"
                 );
 
-            // Update stock
-            orderItem.StoreProduct.CurrentStock += receivedItem.ReceivedQuantity;
-            orderItem.StoreProduct.LastRestocked = DateTime.UtcNow;
+            // Increase destination store stock (match by name)
+            var destinationProduct = await _context.StoreProducts
+                .FirstOrDefaultAsync(p => p.StoreId == order.StoreId && p.Name == orderItem.StoreProduct.Name);
 
-            // Log inventory change
-            _context.InventoryLogs.Add(new InventoryLog
+            if (destinationProduct != null)
             {
-                Id = Guid.NewGuid(),
-                StoreProductId = orderItem.StoreProductId,
-                QuantityChange = receivedItem.ReceivedQuantity,
-                Type = InventoryLogType.Restock,
-                Reason = $"Procurement Order {order.Id} - Received {receivedItem.ReceivedQuantity}/{orderItem.Quantity}",
-                CreatedAt = DateTime.UtcNow
-            });
+                destinationProduct.CurrentStock += receivedItem.ReceivedQuantity;
+                destinationProduct.LastRestocked = DateTime.UtcNow;
+
+                _context.InventoryLogs.Add(new InventoryLog
+                {
+                    Id = Guid.NewGuid(),
+                    StoreProductId = destinationProduct.Id,
+                    QuantityChange = receivedItem.ReceivedQuantity,
+                    Type = InventoryLogType.Restock,
+                    Reason = $"Procurement Order {order.Id} - Received {receivedItem.ReceivedQuantity}/{orderItem.Quantity}",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                _logger.LogWarning("No matching product '{Name}' found in destination store {StoreId} for procurement {OrderId}",
+                    orderItem.StoreProduct.Name, order.StoreId, procurementOrderId);
+            }
+
+            // Decrease source store stock
+            if (order.SourceStoreId.HasValue)
+            {
+                orderItem.StoreProduct.CurrentStock -= receivedItem.ReceivedQuantity;
+
+                _context.InventoryLogs.Add(new InventoryLog
+                {
+                    Id = Guid.NewGuid(),
+                    StoreProductId = orderItem.StoreProductId,
+                    QuantityChange = -receivedItem.ReceivedQuantity,
+                    Type = InventoryLogType.Sale,
+                    Reason = $"Procurement Order {order.Id} - Sold {receivedItem.ReceivedQuantity} to store {order.StoreId}",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             _logger.LogInformation("Received {ReceivedQty}/{OrderedQty} of {ProductName} for procurement {OrderId}",
                 receivedItem.ReceivedQuantity, orderItem.Quantity, orderItem.StoreProduct.Name, procurementOrderId);

@@ -5,6 +5,8 @@ public class ProcurementOrderDto
     public Guid Id { get; set; }
     public Guid StoreId { get; set; }
     public string StoreName { get; set; } = string.Empty;
+    public Guid? SourceStoreId { get; set; }
+    public string? SourceStoreName { get; set; }
     public string Supplier { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
     public string Status { get; set; } = string.Empty;
@@ -29,6 +31,7 @@ public class ProcurementOrderItemDto
 public class CreateProcurementDto
 {
     public Guid StoreId { get; set; }
+    public Guid? SourceStoreId { get; set; }
     public string Supplier { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public List<CreateProcurementItemDto> Items { get; set; } = new();

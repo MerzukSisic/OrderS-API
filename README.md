@@ -29,6 +29,11 @@ OrderS je kompletan informacioni sistem za upravljanje narudžbama u kafiću. Ov
 - ✅ Event-driven komunikacija putem RabbitMQ
 - ✅ Sistem preporuke proizvoda (Hybrid Recommender)
 - ✅ Generisanje računa za goste, kuhinju i šank
+- ✅ Worker mikroservis kreira Notification zapise u bazi pri svakoj narudžbi
+- ✅ Nabavka podržava cross-store transfer (SourceStoreId) — narudžba iz eksternog skladišta
+- ✅ Stores imaju `isExternal` flag za razlikovanje internih i eksternih skladišta
+- ✅ InventoryLogType proširen s `Addition` i `Subtraction` tipovima
+- ✅ OrdersController zaštićen s `[Authorize]` atributom
 
 ### Povezani repozitoriji:
 - 📱 **Mobile aplikacija:** [orders_mobile repo]
@@ -149,6 +154,8 @@ Detaljna dokumentacija algoritma: `recommender-dokumentacija.pdf` (root folder).
 SQL Server 2022 s 15 tabela:
 
 `Users`, `Orders`, `OrderItems`, `OrderItemAccompaniments`, `Products`, `ProductIngredients`, `Categories`, `CafeTables`, `AccompanimentGroups`, `Accompaniments`, `StoreProducts`, `Stores`, `ProcurementOrders`, `ProcurementOrderItems`, `InventoryLogs`, `Notifications`
+
+Migracije baze podataka nalaze se u `OrdersAPI.Infrastructure/Database/` i automatski se primjenjuju pri pokretanju.
 
 Baza se kreira i seeduje automatski pri prvom pokretanju putem `DbInitializer`.
 

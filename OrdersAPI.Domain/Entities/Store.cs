@@ -6,6 +6,7 @@ public class Store
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Address { get; set; }
+    public bool IsExternal { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<StoreProduct> StoreProducts { get; set; } = new List<StoreProduct>();

@@ -6,6 +6,7 @@ public class ProcurementOrder
 {
     public Guid Id { get; set; }
     public Guid StoreId { get; set; }
+    public Guid? SourceStoreId { get; set; }
     public string Supplier { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
     public ProcurementStatus Status { get; set; } = ProcurementStatus.Pending;
@@ -16,5 +17,6 @@ public class ProcurementOrder
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Store Store { get; set; } = null!;
+    public Store? SourceStore { get; set; }
     public ICollection<ProcurementOrderItem> Items { get; set; } = new List<ProcurementOrderItem>();
 }

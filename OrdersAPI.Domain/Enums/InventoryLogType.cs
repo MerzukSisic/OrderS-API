@@ -5,5 +5,7 @@ public enum InventoryLogType
     Sale,
     Restock,
     Adjustment,
-    Damage
+    Damage,
+    Addition,
+    Subtraction
 }

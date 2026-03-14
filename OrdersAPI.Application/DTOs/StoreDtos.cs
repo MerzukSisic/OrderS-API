@@ -8,9 +8,10 @@ public class StoreDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Address { get; set; }
+    public bool IsExternal { get; set; }
     public DateTime CreatedAt { get; set; }
-    public int TotalProducts { get; set; } // Broj StoreProduct-a u store-u
-    public int LowStockProductsCount { get; set; } // Proizvodi sa low stock
+    public int TotalProducts { get; set; }
+    public int LowStockProductsCount { get; set; }
 }
 
 public class CreateStoreDto
@@ -24,6 +25,8 @@ public class CreateStoreDto
 
     [StringLength(200)]
     public string? Address { get; set; }
+
+    public bool IsExternal { get; set; } = false;
 }
 
 public class UpdateStoreDto
@@ -36,4 +39,6 @@ public class UpdateStoreDto
 
     [StringLength(200)]
     public string? Address { get; set; }
+
+    public bool? IsExternal { get; set; }
 }

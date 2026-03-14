@@ -10,6 +10,7 @@ namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpPost]

@@ -145,6 +145,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.StoreId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.SourceStore)
+                .WithMany()
+                .HasForeignKey(e => e.SourceStoreId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ProcurementOrderItem
