@@ -1,6 +1,6 @@
-using System.Net;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
+using OrdersAPI.Domain.Exceptions;
 
 namespace OrdersAPI.API.Middleware;
 
@@ -15,6 +15,21 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
 
         var (statusCode, title, errors) = exception switch
         {
+            NotFoundException => (
+                StatusCodes.Status404NotFound,
+                "Resource Not Found",
+                new Dictionary<string, string[]> { ["error"] = [exception.Message] }
+            ),
+            ConflictException => (
+                StatusCodes.Status409Conflict,
+                "Conflict",
+                new Dictionary<string, string[]> { ["error"] = [exception.Message] }
+            ),
+            BusinessException => (
+                StatusCodes.Status422UnprocessableEntity,
+                "Business Rule Violation",
+                new Dictionary<string, string[]> { ["error"] = [exception.Message] }
+            ),
             KeyNotFoundException => (
                 StatusCodes.Status404NotFound,
                 "Resource Not Found",

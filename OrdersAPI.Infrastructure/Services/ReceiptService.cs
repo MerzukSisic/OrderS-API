@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -27,7 +28,7 @@ public class ReceiptService(ApplicationDbContext context, ILogger<ReceiptService
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {orderId} not found");
+            throw new NotFoundException($"Order with ID {orderId} not found");
 
         var subtotal = order.Items.Sum(i => i.Subtotal);
         var discount = order.IsPartnerOrder ? subtotal * PARTNER_DISCOUNT : 0;
@@ -85,7 +86,7 @@ public class ReceiptService(ApplicationDbContext context, ILogger<ReceiptService
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {orderId} not found");
+            throw new NotFoundException($"Order with ID {orderId} not found");
 
         var kitchenItems = order.Items
             .Where(i => i.Product.Location == PreparationLocation.Kitchen)
@@ -133,7 +134,7 @@ public class ReceiptService(ApplicationDbContext context, ILogger<ReceiptService
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {orderId} not found");
+            throw new NotFoundException($"Order with ID {orderId} not found");
 
         var barItems = order.Items
             .Where(i => i.Product.Location == PreparationLocation.Bar)

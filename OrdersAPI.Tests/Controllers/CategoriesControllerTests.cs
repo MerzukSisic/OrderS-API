@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using OrdersAPI.API.Controllers;
@@ -19,6 +20,11 @@ public class CategoriesControllerTests
         _categoryServiceMock = new Mock<ICategoryService>();
         _controller = new CategoriesController(_categoryServiceMock.Object);
         _testCategoryId = Guid.NewGuid();
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
     }
 
     #region GetCategories Tests
@@ -59,8 +65,8 @@ public class CategoriesControllerTests
         };
 
         _categoryServiceMock
-            .Setup(x => x.GetAllCategoriesAsync())
-            .ReturnsAsync(expectedCategories);
+            .Setup(x => x.GetAllCategoriesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<CategoryDto> { Items = expectedCategories, TotalCount = expectedCategories.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetCategories();
@@ -77,7 +83,7 @@ public class CategoriesControllerTests
         categories.Last().Name.Should().Be("Drinks");
         categories.Last().IconName.Should().Be("drink-icon");
 
-        _categoryServiceMock.Verify(x => x.GetAllCategoriesAsync(), Times.Once);
+        _categoryServiceMock.Verify(x => x.GetAllCategoriesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -85,8 +91,8 @@ public class CategoriesControllerTests
     {
         // Arrange
         _categoryServiceMock
-            .Setup(x => x.GetAllCategoriesAsync())
-            .ReturnsAsync(new List<CategoryDto>());
+            .Setup(x => x.GetAllCategoriesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<CategoryDto> { Items = new List<CategoryDto>(), TotalCount = 0, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetCategories();
@@ -99,7 +105,7 @@ public class CategoriesControllerTests
         categories.Should().NotBeNull();
         categories.Should().BeEmpty();
 
-        _categoryServiceMock.Verify(x => x.GetAllCategoriesAsync(), Times.Once);
+        _categoryServiceMock.Verify(x => x.GetAllCategoriesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

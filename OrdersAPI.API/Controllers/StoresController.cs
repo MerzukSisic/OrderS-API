@@ -11,10 +11,12 @@ namespace OrdersAPI.API.Controllers;
 public class StoresController(IStoreService storeService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<StoreDto>>> GetStores()
+    public async Task<ActionResult<IEnumerable<StoreDto>>> GetStores([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
     {
-        var stores = await storeService.GetAllStoresAsync();
-        return Ok(stores);
+        var result = await storeService.GetAllStoresAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("{id}")]

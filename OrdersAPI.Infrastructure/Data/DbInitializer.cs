@@ -1,4 +1,5 @@
-﻿using OrdersAPI.Domain.Entities;
+﻿using Microsoft.EntityFrameworkCore;
+using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.Infrastructure.Data;
@@ -8,6 +9,10 @@ public static class DbInitializer
     public static void Initialize(ApplicationDbContext context)
     {
         context.Database.EnsureCreated();
+
+        // Ensure token tables exist on existing databases (EnsureCreated is no-op when DB already exists).
+        // These guards are safe to run on every startup; they only create if absent.
+        EnsureTokenTablesExist(context);
 
         // Proveri da li već postoje podaci
         if (context.Users.Any())
@@ -170,5 +175,54 @@ public static class DbInitializer
         };
         context.ProductIngredients.AddRange(productIngredients);
         context.SaveChanges();
+    }
+
+    /// <summary>
+    /// Creates RefreshTokens and PasswordResetTokens tables when they are missing from an
+    /// existing database. EnsureCreated() only runs on brand-new databases; this guard
+    /// handles the incremental case so deployments never break at runtime.
+    /// Safe to call every startup — IF NOT EXISTS makes it idempotent.
+    /// Not called for InMemory test databases (those go through EnsureCreated only).
+    /// </summary>
+    private static void EnsureTokenTablesExist(ApplicationDbContext context)
+    {
+        // Skip for InMemory provider — it doesn't support raw SQL
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'RefreshTokens')
+            BEGIN
+                CREATE TABLE RefreshTokens (
+                    Id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    UserId      UNIQUEIDENTIFIER NOT NULL,
+                    TokenHash   NVARCHAR(512)    NOT NULL,
+                    ExpiresAt   DATETIME2        NOT NULL,
+                    IsRevoked   BIT              NOT NULL DEFAULT 0,
+                    CreatedAt   DATETIME2        NOT NULL,
+                    RevokedAt   DATETIME2        NULL,
+                    CONSTRAINT FK_RefreshTokens_Users
+                        FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+                );
+                CREATE INDEX IX_RefreshTokens_TokenHash ON RefreshTokens(TokenHash);
+                CREATE INDEX IX_RefreshTokens_UserId    ON RefreshTokens(UserId);
+            END");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PasswordResetTokens')
+            BEGIN
+                CREATE TABLE PasswordResetTokens (
+                    Id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    UserId      UNIQUEIDENTIFIER NOT NULL,
+                    TokenHash   NVARCHAR(512)    NOT NULL,
+                    ExpiresAt   DATETIME2        NOT NULL,
+                    IsUsed      BIT              NOT NULL DEFAULT 0,
+                    CreatedAt   DATETIME2        NOT NULL,
+                    CONSTRAINT FK_PasswordResetTokens_Users
+                        FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+                );
+                CREATE INDEX IX_PasswordResetTokens_TokenHash ON PasswordResetTokens(TokenHash);
+                CREATE INDEX IX_PasswordResetTokens_UserId    ON PasswordResetTokens(UserId);
+            END");
     }
 }

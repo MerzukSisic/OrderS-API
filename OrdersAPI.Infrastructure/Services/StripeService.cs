@@ -21,9 +21,8 @@ public class StripeService : IStripeService
         StripeConfiguration.ApiKey = _configuration["Stripe:SecretKey"];
         _webhookSecret = _configuration["Stripe:WebhookSecret"] ?? string.Empty;
     
-        // ✅ DODAJ OVO ZA DEBUG
-        _logger.LogWarning("🔑 Webhook Secret loaded: {Secret}", 
-            string.IsNullOrEmpty(_webhookSecret) ? "EMPTY!" : $"{_webhookSecret.Substring(0, 15)}...");
+        _logger.LogInformation("🔑 Webhook secret: {State}",
+            string.IsNullOrEmpty(_webhookSecret) ? "not configured" : "configured");
     }
     public async Task<PaymentIntentResponseDto> CreatePaymentIntentAsync(CreatePaymentIntentDto dto)
     {
@@ -309,13 +308,15 @@ public class StripeService : IStripeService
                     var paymentIntent = stripeEvent.Data.Object as PaymentIntent;
                     if (paymentIntent != null)
                     {
+                        paymentIntent.Metadata.TryGetValue("procurementOrderId", out var procOrderId);
                         return new WebhookEventDto
                         {
                             EventId = stripeEvent.Id,
                             EventType = stripeEvent.Type,
                             PaymentIntentId = paymentIntent.Id,
                             Status = paymentIntent.Status,
-                            Amount = paymentIntent.Amount / 100m
+                            Amount = paymentIntent.Amount / 100m,
+                            ProcurementOrderId = procOrderId
                         };
                     }
                     break;
@@ -343,13 +344,15 @@ public class StripeService : IStripeService
                     var session = stripeEvent.Data.Object as Session;
                     if (session != null)
                     {
+                        session.Metadata.TryGetValue("procurementOrderId", out var procOrderId);
                         return new WebhookEventDto
                         {
                             EventId = stripeEvent.Id,
                             EventType = stripeEvent.Type,
                             PaymentIntentId = session.PaymentIntentId ?? string.Empty,
                             Status = session.PaymentStatus,
-                            Amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0
+                            Amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0,
+                            ProcurementOrderId = procOrderId
                         };
                     }
                     break;

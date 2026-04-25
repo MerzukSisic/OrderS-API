@@ -66,9 +66,9 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 
     [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] string email)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
-        await authService.RequestPasswordResetAsync(email);
+        await authService.RequestPasswordResetAsync(dto.Email);
         return Ok(new { message = "If the email exists, a password reset link has been sent." });
     }
 

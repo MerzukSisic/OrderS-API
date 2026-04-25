@@ -1,13 +1,16 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Moq;
 using OrdersAPI.API.Controllers;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
-using System.Security.Claims;
 using OrdersAPI.Domain.Enums;
+using OrdersAPI.Infrastructure.Data;
+using System.Security.Claims;
 using Xunit;
 
 namespace OrdersAPI.Tests.Controllers;
@@ -23,7 +26,20 @@ public class ProcurementControllerTests
     public ProcurementControllerTests()
     {
         _procurementServiceMock = new Mock<IProcurementService>();
-        _controller = new ProcurementController(_procurementServiceMock.Object);
+
+        var stripeMock = new Mock<IStripeService>();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        var dbContext = new ApplicationDbContext(options);
+        var logger = Mock.Of<ILogger<ProcurementController>>();
+
+        _controller = new ProcurementController(
+            _procurementServiceMock.Object,
+            stripeMock.Object,
+            dbContext,
+            logger);
+
         _testStoreId = Guid.NewGuid();
         _testProcurementOrderId = Guid.NewGuid();
         _testItemId = Guid.NewGuid();
@@ -64,8 +80,8 @@ public class ProcurementControllerTests
         };
 
         _procurementServiceMock
-            .Setup(x => x.GetAllProcurementOrdersAsync(null))
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetAllProcurementOrdersAsync(null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProcurementOrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProcurementOrders(null);
@@ -80,7 +96,7 @@ public class ProcurementControllerTests
         orders!.First().StoreName.Should().Be("Main Store");
         orders.Last().Supplier.Should().Be("Supplier B");
 
-        _procurementServiceMock.Verify(x => x.GetAllProcurementOrdersAsync(null), Times.Once);
+        _procurementServiceMock.Verify(x => x.GetAllProcurementOrdersAsync(null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -103,8 +119,8 @@ public class ProcurementControllerTests
         };
 
         _procurementServiceMock
-            .Setup(x => x.GetAllProcurementOrdersAsync(_testStoreId))
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetAllProcurementOrdersAsync(_testStoreId, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProcurementOrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProcurementOrders(_testStoreId);
@@ -118,7 +134,7 @@ public class ProcurementControllerTests
         orders.Should().HaveCount(1);
         orders!.First().StoreId.Should().Be(_testStoreId);
 
-        _procurementServiceMock.Verify(x => x.GetAllProcurementOrdersAsync(_testStoreId), Times.Once);
+        _procurementServiceMock.Verify(x => x.GetAllProcurementOrdersAsync(_testStoreId, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion
@@ -284,36 +300,45 @@ public class ProcurementControllerTests
     {
         // Arrange
         var expectedClientSecret = "pi_3AbC123_secret_XYZ";
+        var expectedPaymentIntentId = "pi_3AbC123TestPaymentIntent";
 
-        //_procurementServiceMock
-         //   .Setup(x => x.CreatePaymentIntentAsync(_testProcurementOrderId))
-          //  .ReturnsAsync(expectedClientSecret);
+        _procurementServiceMock
+            .Setup(x => x.CreatePaymentIntentAsync(_testProcurementOrderId))
+            .ReturnsAsync(new PaymentIntentResponseDto
+            {
+                ClientSecret = expectedClientSecret,
+                PaymentIntentId = expectedPaymentIntentId,
+                Amount = 100m,
+                Currency = "eur",
+                Status = "requires_payment_method"
+            });
 
         // Act
         var result = await _controller.CreatePaymentIntent(_testProcurementOrderId);
 
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
-        var okResult = result.Result as OkObjectResult;
-        var paymentIntent = okResult!.Value as PaymentIntentDto;
+        var paymentIntent = (result.Result as OkObjectResult)!.Value as PaymentIntentDto;
 
         paymentIntent.Should().NotBeNull();
         paymentIntent!.ClientSecret.Should().Be(expectedClientSecret);
+        paymentIntent.PaymentIntentId.Should().Be(expectedPaymentIntentId);
 
         _procurementServiceMock.Verify(x => x.CreatePaymentIntentAsync(_testProcurementOrderId), Times.Once);
     }
 
     [Fact]
-    public async Task CreatePaymentIntent_NonExistingOrder_ThrowsKeyNotFoundException()
+    public async Task CreatePaymentIntent_NonExistingOrder_Returns500()
     {
-        // Arrange
+        // The controller wraps service exceptions in a try/catch and returns 500
         _procurementServiceMock
             .Setup(x => x.CreatePaymentIntentAsync(It.IsAny<Guid>()))
             .ThrowsAsync(new KeyNotFoundException("Procurement order not found"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            _controller.CreatePaymentIntent(_testProcurementOrderId));
+        var result = await _controller.CreatePaymentIntent(_testProcurementOrderId);
+
+        result.Result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(500);
 
         _procurementServiceMock.Verify(x => x.CreatePaymentIntentAsync(_testProcurementOrderId), Times.Once);
     }
@@ -345,9 +370,9 @@ public class ProcurementControllerTests
     }
 
     [Fact]
-    public async Task ConfirmPayment_InvalidPaymentIntent_ThrowsInvalidOperationException()
+    public async Task ConfirmPayment_InvalidPaymentIntent_Returns500()
     {
-        // Arrange
+        // The controller wraps service exceptions in a try/catch and returns 500
         var confirmDto = new ConfirmPaymentDto
         {
             PaymentIntentId = "invalid_payment_intent"
@@ -357,9 +382,10 @@ public class ProcurementControllerTests
             .Setup(x => x.ConfirmPaymentAsync(_testProcurementOrderId, confirmDto.PaymentIntentId))
             .ThrowsAsync(new InvalidOperationException("Payment intent not found or already processed"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _controller.ConfirmPayment(_testProcurementOrderId, confirmDto));
+        var result = await _controller.ConfirmPayment(_testProcurementOrderId, confirmDto);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(500);
 
         _procurementServiceMock.Verify(x => x.ConfirmPaymentAsync(_testProcurementOrderId, confirmDto.PaymentIntentId), Times.Once);
     }

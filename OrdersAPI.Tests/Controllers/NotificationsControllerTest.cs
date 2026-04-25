@@ -58,8 +58,8 @@ public class NotificationsControllerTests
         };
 
         _notificationServiceMock
-            .Setup(x => x.GetUserNotificationsAsync(_testUserId, false))
-            .ReturnsAsync(expectedNotifications);
+            .Setup(x => x.GetUserNotificationsAsync(_testUserId, false, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<NotificationDto> { Items = expectedNotifications, TotalCount = expectedNotifications.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetNotifications(false);
@@ -74,7 +74,7 @@ public class NotificationsControllerTests
         notifications!.First().Title.Should().Be("Order Ready");
         notifications.Last().IsRead.Should().BeTrue();
 
-        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, false), Times.Once);
+        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, false, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public class NotificationsControllerTests
         };
 
         _notificationServiceMock
-            .Setup(x => x.GetUserNotificationsAsync(_testUserId, true))
-            .ReturnsAsync(expectedNotifications);
+            .Setup(x => x.GetUserNotificationsAsync(_testUserId, true, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<NotificationDto> { Items = expectedNotifications, TotalCount = expectedNotifications.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetNotifications(true);
@@ -111,7 +111,7 @@ public class NotificationsControllerTests
         notifications.Should().HaveCount(1);
         notifications!.All(n => !n.IsRead).Should().BeTrue();
 
-        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, true), Times.Once);
+        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, true, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -119,8 +119,8 @@ public class NotificationsControllerTests
     {
         // Arrange
         _notificationServiceMock
-            .Setup(x => x.GetUserNotificationsAsync(_testUserId, false))
-            .ReturnsAsync(new List<NotificationDto>());
+            .Setup(x => x.GetUserNotificationsAsync(_testUserId, false, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<NotificationDto> { Items = new List<NotificationDto>(), TotalCount = 0, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetNotifications(false);
@@ -133,7 +133,7 @@ public class NotificationsControllerTests
         notifications.Should().NotBeNull();
         notifications.Should().BeEmpty();
 
-        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, false), Times.Once);
+        _notificationServiceMock.Verify(x => x.GetUserNotificationsAsync(_testUserId, false, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -65,7 +66,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
             .FirstOrDefaultAsync(sp => sp.Id == id);
 
         if (product == null)
-            throw new KeyNotFoundException($"Store product with ID {id} not found");
+            throw new NotFoundException($"Store product with ID {id} not found");
 
         return product;
     }
@@ -74,7 +75,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
     {
         var storeExists = await context.Stores.AnyAsync(s => s.Id == dto.StoreId);
         if (!storeExists)
-            throw new KeyNotFoundException($"Store with ID {dto.StoreId} not found");
+            throw new NotFoundException($"Store with ID {dto.StoreId} not found");
 
         var product = new StoreProduct
         {
@@ -102,7 +103,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
     {
         var product = await context.StoreProducts.FindAsync(id);
         if (product == null)
-            throw new KeyNotFoundException($"Store product with ID {id} not found");
+            throw new NotFoundException($"Store product with ID {id} not found");
 
         if (dto.Name != null) product.Name = dto.Name;
         if (dto.Description != null) product.Description = dto.Description;
@@ -120,7 +121,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
     {
         var product = await context.StoreProducts.FindAsync(id);
         if (product == null)
-            throw new KeyNotFoundException($"Store product with ID {id} not found");
+            throw new NotFoundException($"Store product with ID {id} not found");
 
         context.StoreProducts.Remove(product);
         await context.SaveChangesAsync();
@@ -132,13 +133,13 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
     {
         var product = await context.StoreProducts.FindAsync(storeProductId);
         if (product == null)
-            throw new KeyNotFoundException($"Store product with ID {storeProductId} not found");
+            throw new NotFoundException($"Store product with ID {storeProductId} not found");
 
         var previousStock = product.CurrentStock;
         product.CurrentStock += dto.QuantityChange;
 
         if (product.CurrentStock < 0)
-            throw new InvalidOperationException($"Insufficient stock. Current: {previousStock}, Requested change: {dto.QuantityChange}");
+            throw new BusinessException($"Insufficient stock. Current: {previousStock}, Requested change: {dto.QuantityChange}");
 
         if (dto.Type == "Restock")
             product.LastRestocked = DateTime.UtcNow;

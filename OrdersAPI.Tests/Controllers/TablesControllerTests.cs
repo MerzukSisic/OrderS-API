@@ -71,8 +71,8 @@ public class TablesControllerTests
         };
 
         _tableServiceMock
-            .Setup(x => x.GetAllTablesAsync())
-            .ReturnsAsync(expectedTables);
+            .Setup(x => x.GetAllTablesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<TableDto> { Items = expectedTables, TotalCount = expectedTables.Count, Page = 1, PageSize = 100 });
 
         // Act
         var result = await _controller.GetTables();
@@ -88,7 +88,7 @@ public class TablesControllerTests
         tables.ElementAt(1).Status.Should().Be("Occupied");
         tables.Last().Capacity.Should().Be(2);
 
-        _tableServiceMock.Verify(x => x.GetAllTablesAsync(), Times.Once);
+        _tableServiceMock.Verify(x => x.GetAllTablesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public class TablesControllerTests
     {
         // Arrange
         _tableServiceMock
-            .Setup(x => x.GetAllTablesAsync())
-            .ReturnsAsync(new List<TableDto>());
+            .Setup(x => x.GetAllTablesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<TableDto> { Items = new List<TableDto>(), TotalCount = 0, Page = 1, PageSize = 100 });
 
         // Act
         var result = await _controller.GetTables();
@@ -110,7 +110,7 @@ public class TablesControllerTests
         tables.Should().NotBeNull();
         tables.Should().BeEmpty();
 
-        _tableServiceMock.Verify(x => x.GetAllTablesAsync(), Times.Once);
+        _tableServiceMock.Verify(x => x.GetAllTablesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

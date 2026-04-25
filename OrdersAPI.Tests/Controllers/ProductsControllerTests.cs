@@ -62,8 +62,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetAllProductsAsync(null, null))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetAllProductsAsync(null, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProducts(null, null);
@@ -77,7 +77,7 @@ public class ProductsControllerTests
         products.Should().HaveCount(2);
         products!.First().Name.Should().Be("Pizza Margherita");
 
-        _productServiceMock.Verify(x => x.GetAllProductsAsync(null, null), Times.Once);
+        _productServiceMock.Verify(x => x.GetAllProductsAsync(null, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetAllProductsAsync(_testCategoryId, null))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetAllProductsAsync(_testCategoryId, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProducts(_testCategoryId, null);
@@ -113,7 +113,7 @@ public class ProductsControllerTests
         products.Should().HaveCount(1);
         products!.First().CategoryId.Should().Be(_testCategoryId);
 
-        _productServiceMock.Verify(x => x.GetAllProductsAsync(_testCategoryId, null), Times.Once);
+        _productServiceMock.Verify(x => x.GetAllProductsAsync(_testCategoryId, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -131,8 +131,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetAllProductsAsync(null, true))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetAllProductsAsync(null, true, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProducts(null, true);
@@ -145,7 +145,7 @@ public class ProductsControllerTests
         products.Should().NotBeNull();
         products!.All(p => p.IsAvailable).Should().BeTrue();
 
-        _productServiceMock.Verify(x => x.GetAllProductsAsync(null, true), Times.Once);
+        _productServiceMock.Verify(x => x.GetAllProductsAsync(null, true, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

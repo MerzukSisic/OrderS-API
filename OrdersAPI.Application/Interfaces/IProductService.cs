@@ -6,7 +6,7 @@ namespace OrdersAPI.Application.Interfaces;
 
 public interface IProductService
 {
-    Task<IEnumerable<ProductDto>> GetAllProductsAsync(Guid? categoryId = null, bool? isAvailable = null);
+    Task<PagedResult<ProductDto>> GetAllProductsAsync(Guid? categoryId = null, bool? isAvailable = null, int page = 1, int pageSize = 50);
     Task<ProductDto> GetProductByIdAsync(Guid id);
     Task<ProductDto> CreateProductAsync(CreateProductDto dto);
     Task UpdateProductAsync(Guid id, UpdateProductDto dto);

@@ -8,7 +8,7 @@ public interface IOrderService
 {
     Task<OrderDto> CreateOrderAsync(Guid waiterId, CreateOrderDto dto);
     Task<OrderDto> GetOrderByIdAsync(Guid id);
-    Task<IEnumerable<OrderDto>> GetOrdersAsync(Guid? waiterId = null, DateTime? fromDate = null, DateTime? toDate = null, OrderStatus? status = null);
+    Task<PagedResult<OrderDto>> GetOrdersAsync(Guid? waiterId = null, DateTime? fromDate = null, DateTime? toDate = null, OrderStatus? status = null, int page = 1, int pageSize = 50);
     Task UpdateOrderStatusAsync(Guid id, OrderStatus status);
     Task<IEnumerable<OrderDto>> GetActiveOrdersAsync();
     

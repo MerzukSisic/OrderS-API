@@ -216,8 +216,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetOrdersAsync(null, null, null, null))
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetOrdersAsync(null, null, null, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetOrders(null, null, null, null);
@@ -230,7 +230,7 @@ public class OrdersControllerTests
         orders.Should().NotBeNull();
         orders.Should().HaveCount(2);
 
-        _orderServiceMock.Verify(x => x.GetOrdersAsync(null, null, null, null), Times.Once);
+        _orderServiceMock.Verify(x => x.GetOrdersAsync(null, null, null, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -258,8 +258,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetOrdersAsync(_testUserId, fromDate, toDate, status))
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetOrdersAsync(_testUserId, fromDate, toDate, status, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetOrders(_testUserId, fromDate, toDate, status);
@@ -273,7 +273,7 @@ public class OrdersControllerTests
         orders.Should().HaveCount(1);
         orders!.First().Status.Should().Be("Pending");
 
-        _orderServiceMock.Verify(x => x.GetOrdersAsync(_testUserId, fromDate, toDate, status), Times.Once);
+        _orderServiceMock.Verify(x => x.GetOrdersAsync(_testUserId, fromDate, toDate, status, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

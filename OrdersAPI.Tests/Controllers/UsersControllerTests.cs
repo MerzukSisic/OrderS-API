@@ -67,8 +67,8 @@ public class UsersControllerTests
         };
 
         _userServiceMock
-            .Setup(x => x.GetAllUsersAsync())
-            .ReturnsAsync(expectedUsers);
+            .Setup(x => x.GetAllUsersAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<UserDto> { Items = expectedUsers, TotalCount = expectedUsers.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetUsers();
@@ -84,7 +84,7 @@ public class UsersControllerTests
         users.ElementAt(1).Role.Should().Be("Bartender");
         users.Last().IsActive.Should().BeFalse();
 
-        _userServiceMock.Verify(x => x.GetAllUsersAsync(), Times.Once);
+        _userServiceMock.Verify(x => x.GetAllUsersAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion
@@ -118,8 +118,8 @@ public class UsersControllerTests
         };
 
         _userServiceMock
-            .Setup(x => x.GetActiveUsersAsync())
-            .ReturnsAsync(expectedUsers);
+            .Setup(x => x.GetActiveUsersAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<UserDto> { Items = expectedUsers, TotalCount = expectedUsers.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetActiveUsers();
@@ -133,7 +133,7 @@ public class UsersControllerTests
         users.Should().HaveCount(2);
         users!.All(u => u.IsActive).Should().BeTrue();
 
-        _userServiceMock.Verify(x => x.GetActiveUsersAsync(), Times.Once);
+        _userServiceMock.Verify(x => x.GetActiveUsersAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

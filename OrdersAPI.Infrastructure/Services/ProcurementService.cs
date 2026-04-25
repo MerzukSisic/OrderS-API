@@ -1,4 +1,6 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -13,19 +15,23 @@ public class ProcurementService : IProcurementService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<ProcurementService> _logger;
     private readonly IStripeService _stripeService;
+    private readonly IConfiguration _configuration;
 
     public ProcurementService(
         ApplicationDbContext context,
         ILogger<ProcurementService> logger,
-        IStripeService stripeService)
+        IStripeService stripeService,
+        IConfiguration configuration)
     {
         _context = context;
         _logger = logger;
         _stripeService = stripeService;
+        _configuration = configuration;
     }
 
-    public async Task<IEnumerable<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null)
+    public async Task<PagedResult<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null, int page = 1, int pageSize = 50)
     {
+        var clampedPageSize = Math.Min(pageSize, 100);
         var query = _context.ProcurementOrders
             .AsNoTracking()
             .Include(p => p.Store)
@@ -37,8 +43,12 @@ public class ProcurementService : IProcurementService
         if (storeId.HasValue)
             query = query.Where(p => p.StoreId == storeId);
 
+        var totalCount = await query.CountAsync();
+
         var orders = await query
             .OrderByDescending(p => p.OrderDate)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(p => new ProcurementOrderDto
             {
                 Id = p.Id,
@@ -65,7 +75,7 @@ public class ProcurementService : IProcurementService
             })
             .ToListAsync();
 
-        return orders;
+        return new PagedResult<ProcurementOrderDto> { Items = orders, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<ProcurementOrderDto> GetProcurementOrderByIdAsync(Guid id)
@@ -103,7 +113,7 @@ public class ProcurementService : IProcurementService
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (order == null)
-            throw new KeyNotFoundException($"Procurement order with ID {id} not found");
+            throw new NotFoundException($"Procurement order with ID {id} not found");
 
         return order;
     }
@@ -112,14 +122,14 @@ public class ProcurementService : IProcurementService
     {
         var storeExists = await _context.Stores.AnyAsync(s => s.Id == dto.StoreId);
         if (!storeExists)
-            throw new KeyNotFoundException($"Store with ID {dto.StoreId} not found");
+            throw new NotFoundException($"Store with ID {dto.StoreId} not found");
 
         bool sourceStoreIsInternal = false;
         if (dto.SourceStoreId.HasValue)
         {
             var sourceStore = await _context.Stores.FindAsync(dto.SourceStoreId.Value);
             if (sourceStore == null)
-                throw new KeyNotFoundException($"Source store with ID {dto.SourceStoreId} not found");
+                throw new NotFoundException($"Source store with ID {dto.SourceStoreId} not found");
             sourceStoreIsInternal = !sourceStore.IsExternal;
         }
 
@@ -140,13 +150,13 @@ public class ProcurementService : IProcurementService
         {
             var storeProduct = await _context.StoreProducts.FindAsync(itemDto.StoreProductId);
             if (storeProduct == null)
-                throw new KeyNotFoundException($"Store product with ID {itemDto.StoreProductId} not found");
+                throw new NotFoundException($"Store product with ID {itemDto.StoreProductId} not found");
 
             // If ordering from an internal source store, check available stock
             if (sourceStoreIsInternal)
             {
                 if (storeProduct.CurrentStock < itemDto.Quantity)
-                    throw new InvalidOperationException(
+                    throw new BusinessException(
                         $"Insufficient stock for '{storeProduct.Name}'. Available: {storeProduct.CurrentStock}, Requested: {itemDto.Quantity}");
             }
 
@@ -193,7 +203,7 @@ public class ProcurementService : IProcurementService
     {
         var order = await _context.ProcurementOrders.FindAsync(procurementOrderId);
         if (order == null)
-            throw new KeyNotFoundException($"Procurement order with ID {procurementOrderId} not found");
+            throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
 
         // Create payment intent via Stripe
         var createDto = new CreatePaymentIntentDto
@@ -221,40 +231,46 @@ public class ProcurementService : IProcurementService
             .FirstOrDefaultAsync(o => o.Id == procurementOrderId);
 
         if (order == null)
-            throw new InvalidOperationException("Procurement order not found");
+            throw new BusinessException("Procurement order not found");
 
-        // ⚠️ TEST MODE: Auto-approve payments in development
-#if DEBUG
-        _logger.LogWarning($"⚠️ TEST MODE: Auto-approving payment {paymentIntentId} for order {procurementOrderId}");
-        order.Status = ProcurementStatus.Paid;
-        order.StripePaymentIntentId = paymentIntentId;
-        await _context.SaveChangesAsync();
+        // Config-gated bypass: Stripe:BypassVerification=true skips real Stripe verification.
+        // Default is false — always verify with Stripe.
+        var bypassVerification =
+            bool.TryParse(_configuration["Stripe:BypassVerification"], out var parsedBypassVerification) &&
+            parsedBypassVerification;
 
-        _logger.LogInformation($"✅ Payment {paymentIntentId} auto-approved for order {procurementOrderId}");
-        return;
-#endif
+        if (bypassVerification)
+        {
+            _logger.LogWarning(
+                "Stripe:BypassVerification=true — auto-approving payment {PaymentIntentId} for order {OrderId}",
+                paymentIntentId, procurementOrderId);
+            order.Status = ProcurementStatus.Paid;
+            order.StripePaymentIntentId = paymentIntentId;
+            await _context.SaveChangesAsync();
+            return;
+        }
 
-        // PRODUCTION: Verify with Stripe
+        // Default: verify with Stripe
         var paymentIntent = await _stripeService.GetPaymentIntentAsync(paymentIntentId);
 
         if (paymentIntent.Status != "succeeded")
         {
-            _logger.LogError($"❌ Payment intent {paymentIntentId} status: {paymentIntent.Status}");
-            throw new InvalidOperationException($"Payment failed or not confirmed with Stripe. Status: {paymentIntent.Status}");
+            _logger.LogError("Payment intent {PaymentIntentId} status: {Status}", paymentIntentId, paymentIntent.Status);
+            throw new BusinessException($"Payment not confirmed by Stripe. Status: {paymentIntent.Status}");
         }
 
         order.Status = ProcurementStatus.Paid;
         order.StripePaymentIntentId = paymentIntentId;
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation($"✅ Payment confirmed for procurement order {procurementOrderId}");
+        _logger.LogInformation("Payment confirmed for procurement order {OrderId}", procurementOrderId);
     }
 
     public async Task UpdateProcurementStatusAsync(Guid id, ProcurementStatus status)
     {
         var order = await _context.ProcurementOrders.FindAsync(id);
         if (order == null)
-            throw new KeyNotFoundException($"Procurement order with ID {id} not found");
+            throw new NotFoundException($"Procurement order with ID {id} not found");
 
         order.Status = status;
 
@@ -274,19 +290,19 @@ public class ProcurementService : IProcurementService
             .FirstOrDefaultAsync(p => p.Id == procurementOrderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Procurement order with ID {procurementOrderId} not found");
+            throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
 
         if (order.Status != ProcurementStatus.Paid)
-            throw new InvalidOperationException("Order must be paid before receiving");
+            throw new BusinessException("Order must be paid before receiving");
 
         foreach (var receivedItem in dto.Items)
         {
             var orderItem = order.Items.FirstOrDefault(i => i.Id == receivedItem.ItemId);
             if (orderItem == null)
-                throw new KeyNotFoundException($"Order item with ID {receivedItem.ItemId} not found");
+                throw new NotFoundException($"Order item with ID {receivedItem.ItemId} not found");
 
             if (receivedItem.ReceivedQuantity > orderItem.Quantity)
-                throw new InvalidOperationException(
+                throw new BusinessException(
                     $"Received quantity ({receivedItem.ReceivedQuantity}) cannot exceed ordered quantity ({orderItem.Quantity})"
                 );
 

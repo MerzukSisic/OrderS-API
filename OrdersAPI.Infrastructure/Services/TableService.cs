@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -10,10 +11,15 @@ namespace OrdersAPI.Infrastructure.Services;
 
 public class TableService(ApplicationDbContext context, ILogger<TableService> logger) : ITableService
 {
-    public async Task<IEnumerable<TableDto>> GetAllTablesAsync()
+    public async Task<PagedResult<TableDto>> GetAllTablesAsync(int page = 1, int pageSize = 100)
     {
-        var tables = await context.CafeTables
-            .AsNoTracking()
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.CafeTables.AsNoTracking();
+        var totalCount = await query.CountAsync();
+        var tables = await query
+            .OrderBy(t => t.TableNumber)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(t => new TableDto
             {
                 Id = t.Id,
@@ -32,10 +38,8 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
                 ActiveOrderCount = t.Orders
                     .Count(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
             })
-            .OrderBy(t => t.TableNumber)
             .ToListAsync();
-
-        return tables;
+        return new PagedResult<TableDto> { Items = tables, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<TableDto> GetTableByIdAsync(Guid id)
@@ -64,7 +68,7 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
             .FirstOrDefaultAsync();
 
         if (table == null)
-            throw new KeyNotFoundException($"Table with ID {id} not found");
+            throw new NotFoundException($"Table with ID {id} not found");
 
         return table;
     }
@@ -74,7 +78,7 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
         // Check if table number already exists
         var exists = await context.CafeTables.AnyAsync(t => t.TableNumber == dto.TableNumber);
         if (exists)
-            throw new InvalidOperationException($"Table with number {dto.TableNumber} already exists");
+            throw new BusinessException($"Table with number {dto.TableNumber} already exists");
 
         var table = new CafeTable
         {
@@ -97,14 +101,14 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
     {
         var table = await context.CafeTables.FindAsync(id);
         if (table == null)
-            throw new KeyNotFoundException($"Table with ID {id} not found");
+            throw new NotFoundException($"Table with ID {id} not found");
 
         // Check if new table number conflicts
         if (dto.TableNumber != null && dto.TableNumber != table.TableNumber)
         {
             var exists = await context.CafeTables.AnyAsync(t => t.TableNumber == dto.TableNumber && t.Id != id);
             if (exists)
-                throw new InvalidOperationException($"Table with number {dto.TableNumber} already exists");
+                throw new BusinessException($"Table with number {dto.TableNumber} already exists");
         }
 
         if (dto.TableNumber != null) table.TableNumber = dto.TableNumber;
@@ -121,7 +125,7 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
     {
         var table = await context.CafeTables.FindAsync(id);
         if (table == null)
-            throw new KeyNotFoundException($"Table with ID {id} not found");
+            throw new NotFoundException($"Table with ID {id} not found");
 
         table.Status = status;
         await context.SaveChangesAsync();
@@ -137,7 +141,7 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (table == null)
-            throw new KeyNotFoundException($"Table with ID {id} not found");
+            throw new NotFoundException($"Table with ID {id} not found");
 
         // Check if table has active orders
         var hasActiveOrders = table.Orders.Any(o => 
@@ -145,7 +149,7 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
             o.Status != OrderStatus.Cancelled);
 
         if (hasActiveOrders)
-            throw new InvalidOperationException($"Cannot delete table {table.TableNumber} with active orders");
+            throw new BusinessException($"Cannot delete table {table.TableNumber} with active orders");
 
         context.CafeTables.Remove(table);
         await context.SaveChangesAsync();

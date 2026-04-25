@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -12,11 +13,14 @@ public class UserService(
     ApplicationDbContext context,
     ILogger<UserService> logger) : IUserService
 {
-    public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
+    public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page = 1, int pageSize = 50)
     {
-        var users = await context.Users
-            .AsNoTracking()
-            .OrderBy(u => u.FullName)
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Users.AsNoTracking().OrderBy(u => u.FullName);
+        var totalCount = await query.CountAsync();
+        var users = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(u => new UserDto
             {
                 Id = u.Id,
@@ -29,8 +33,7 @@ public class UserService(
                 UpdatedAt = u.UpdatedAt
             })
             .ToListAsync();
-
-        return users;
+        return new PagedResult<UserDto> { Items = users, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<UserDto> GetUserByIdAsync(Guid id)
@@ -52,7 +55,7 @@ public class UserService(
             .FirstOrDefaultAsync();
 
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {id} not found");
+            throw new NotFoundException($"User with ID {id} not found");
 
         return user;
     }
@@ -61,11 +64,11 @@ public class UserService(
     {
         // Validate email uniqueness
         if (await context.Users.AnyAsync(u => u.Email == dto.Email))
-            throw new InvalidOperationException($"Email {dto.Email} is already registered");
+            throw new ConflictException($"Email {dto.Email} is already registered");
 
         // Validate role
         if (!Enum.TryParse<UserRole>(dto.Role, out var role))
-            throw new InvalidOperationException($"Invalid role: {dto.Role}");
+            throw new BusinessException($"Invalid role: {dto.Role}");
 
         var user = new User
         {
@@ -93,7 +96,7 @@ public class UserService(
     {
         var user = await context.Users.FindAsync(id);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {id} not found");
+            throw new NotFoundException($"User with ID {id} not found");
 
         if (dto.FullName != null) user.FullName = dto.FullName;
         if (dto.PhoneNumber != null) user.PhoneNumber = dto.PhoneNumber;
@@ -113,7 +116,7 @@ public class UserService(
             .FirstOrDefaultAsync(u => u.Id == id);
 
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {id} not found");
+            throw new NotFoundException($"User with ID {id} not found");
 
         // Check if user has orders (soft delete instead)
         if (user.Orders.Any())
@@ -164,7 +167,7 @@ public class UserService(
     {
         var user = await context.Users.FindAsync(id);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {id} not found");
+            throw new NotFoundException($"User with ID {id} not found");
 
         user.IsActive = false;
         user.UpdatedAt = DateTime.UtcNow;
@@ -178,7 +181,7 @@ public class UserService(
     {
         var user = await context.Users.FindAsync(id);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {id} not found");
+            throw new NotFoundException($"User with ID {id} not found");
 
         user.IsActive = true;
         user.UpdatedAt = DateTime.UtcNow;
@@ -188,12 +191,14 @@ public class UserService(
         logger.LogInformation("User {UserId} ({Email}) activated", id, user.Email);
     }
 
-    public async Task<List<UserDto>> GetActiveUsersAsync()
+    public async Task<PagedResult<UserDto>> GetActiveUsersAsync(int page = 1, int pageSize = 50)
     {
-        var users = await context.Users
-            .AsNoTracking()
-            .Where(u => u.IsActive)
-            .OrderBy(u => u.FullName)
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Users.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.FullName);
+        var totalCount = await query.CountAsync();
+        var users = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(u => new UserDto
             {
                 Id = u.Id,
@@ -206,7 +211,6 @@ public class UserService(
                 UpdatedAt = u.UpdatedAt
             })
             .ToListAsync();
-
-        return users;
+        return new PagedResult<UserDto> { Items = users, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 }

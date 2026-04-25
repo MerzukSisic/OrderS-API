@@ -6,7 +6,7 @@ namespace OrdersAPI.Application.Interfaces;
 
 public interface IProcurementService
 {
-    Task<IEnumerable<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null);
+    Task<PagedResult<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null, int page = 1, int pageSize = 50);
     Task<ProcurementOrderDto> GetProcurementOrderByIdAsync(Guid id);
     Task<ProcurementOrderDto> CreateProcurementOrderAsync(CreateProcurementDto dto);
     Task<PaymentIntentResponseDto> CreatePaymentIntentAsync(Guid procurementOrderId);

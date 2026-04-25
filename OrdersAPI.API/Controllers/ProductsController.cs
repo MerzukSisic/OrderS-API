@@ -15,10 +15,16 @@ public class ProductsController(IProductService productService) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts(
         [FromQuery] Guid? categoryId = null,
-        [FromQuery] bool? isAvailable = null)
+        [FromQuery] bool? isAvailable = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var products = await productService.GetAllProductsAsync(categoryId, isAvailable);
-        return Ok(products);
+        var result = await productService.GetAllProductsAsync(categoryId, isAvailable, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("{id}")]

@@ -41,4 +41,9 @@ public class WebhookEventDto
     public string PaymentIntentId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    /// <summary>
+    /// Procurement order ID extracted from Stripe metadata ("procurementOrderId" key).
+    /// Present on checkout.session.completed and payment_intent.succeeded when set during session/intent creation.
+    /// </summary>
+    public string? ProcurementOrderId { get; set; }
 }

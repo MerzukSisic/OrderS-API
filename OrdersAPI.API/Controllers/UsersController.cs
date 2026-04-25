@@ -13,17 +13,25 @@ namespace OrdersAPI.API.Controllers;
 public class UsersController(IUserService userService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        var users = await userService.GetAllUsersAsync();
-        return Ok(users);
+        var result = await userService.GetAllUsersAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("active")]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetActiveUsers()
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetActiveUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        var users = await userService.GetActiveUsersAsync();
-        return Ok(users);
+        var result = await userService.GetActiveUsersAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("by-role/{role}")]

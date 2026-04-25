@@ -12,7 +12,6 @@ public class RegisterDto
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
-    public string Role { get; set; } = "Waiter";
 }
 
 public class AuthResponseDto
@@ -23,6 +22,11 @@ public class AuthResponseDto
     public string Role { get; set; } = string.Empty;
     public string AccessToken { get; set; } = string.Empty;
     public string? RefreshToken { get; set; }
+}
+
+public class ForgotPasswordDto
+{
+    public string Email { get; set; } = string.Empty;
 }
 
 public class ResetPasswordDto

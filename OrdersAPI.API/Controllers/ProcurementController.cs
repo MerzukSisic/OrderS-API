@@ -19,10 +19,15 @@ public class ProcurementController(
     : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProcurementOrderDto>>> GetProcurementOrders([FromQuery] Guid? storeId = null)
+    public async Task<ActionResult<IEnumerable<ProcurementOrderDto>>> GetProcurementOrders(
+        [FromQuery] Guid? storeId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var orders = await procurementService.GetAllProcurementOrdersAsync(storeId);
-        return Ok(orders);
+        var result = await procurementService.GetAllProcurementOrdersAsync(storeId, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("{id}")]

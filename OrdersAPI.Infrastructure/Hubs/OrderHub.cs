@@ -1,22 +1,21 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace OrdersAPI.Infrastructure.Hubs;
 
 [Authorize]
-public class OrderHub : Hub
+public class OrderHub(ILogger<OrderHub> logger) : Hub
 {
     public override async Task OnConnectedAsync()
     {
-        // Get user role from JWT token
         var userRole = Context.User?.Claims
             .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
-        
+
         if (!string.IsNullOrEmpty(userRole))
         {
-            // Add user to their role group (Admin, Kitchen, Bartender, Waiter)
             await Groups.AddToGroupAsync(Context.ConnectionId, userRole);
-            Console.WriteLine($"✅ SignalR: User connected to {userRole} group - ConnectionId: {Context.ConnectionId}");
+            logger.LogInformation("SignalR: User connected to {Role} group - ConnectionId: {ConnectionId}", userRole, Context.ConnectionId);
         }
 
         await base.OnConnectedAsync();
@@ -26,17 +25,16 @@ public class OrderHub : Hub
     {
         var userRole = Context.User?.Claims
             .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
-        
+
         if (!string.IsNullOrEmpty(userRole))
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, userRole);
-            Console.WriteLine($"❌ SignalR: User disconnected from {userRole} group - ConnectionId: {Context.ConnectionId}");
+            logger.LogInformation("SignalR: User disconnected from {Role} group - ConnectionId: {ConnectionId}", userRole, Context.ConnectionId);
         }
 
         await base.OnDisconnectedAsync(exception);
     }
 
-    // Client can manually join specific groups if needed
     public async Task JoinGroup(string groupName)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);

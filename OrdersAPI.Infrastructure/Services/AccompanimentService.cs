@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -43,7 +44,7 @@ public class AccompanimentService(
         if (!productExists)
         {
             logger.LogWarning("Attempted to create accompaniment group for non-existent product {ProductId}", dto.ProductId);
-            throw new KeyNotFoundException($"Product with ID {dto.ProductId} not found");
+            throw new NotFoundException($"Product with ID {dto.ProductId} not found");
         }
 
         var group = new AccompanimentGroup
@@ -82,7 +83,7 @@ public class AccompanimentService(
             group.Id, group.Accompaniments.Count);
 
         return await GetGroupByIdAsync(group.Id) 
-            ?? throw new InvalidOperationException("Failed to retrieve created group");
+            ?? throw new BusinessException("Failed to retrieve created group");
     }
 
     public async Task UpdateGroupAsync(Guid id, UpdateAccompanimentGroupDto dto)
@@ -91,7 +92,7 @@ public class AccompanimentService(
         if (group == null)
         {
             logger.LogWarning("Attempted to update non-existent accompaniment group {GroupId}", id);
-            throw new KeyNotFoundException($"AccompanimentGroup with ID {id} not found");
+            throw new NotFoundException($"AccompanimentGroup with ID {id} not found");
         }
 
         group.Name = dto.Name;
@@ -110,7 +111,7 @@ public class AccompanimentService(
     {
         var group = await context.AccompanimentGroups.FindAsync(id);
         if (group == null)
-            throw new KeyNotFoundException($"AccompanimentGroup with ID {id} not found");
+            throw new NotFoundException($"AccompanimentGroup with ID {id} not found");
 
         context.AccompanimentGroups.Remove(group);
         await context.SaveChangesAsync();
@@ -128,7 +129,7 @@ public class AccompanimentService(
     {
         var groupExists = await context.AccompanimentGroups.AnyAsync(g => g.Id == groupId);
         if (!groupExists)
-            throw new KeyNotFoundException($"AccompanimentGroup with ID {groupId} not found");
+            throw new NotFoundException($"AccompanimentGroup with ID {groupId} not found");
 
         var accompaniment = new Accompaniment
         {
@@ -154,7 +155,7 @@ public class AccompanimentService(
     {
         var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
+            throw new NotFoundException($"Accompaniment with ID {id} not found");
 
         accompaniment.Name = dto.Name;
         accompaniment.ExtraCharge = dto.ExtraCharge;
@@ -170,7 +171,7 @@ public class AccompanimentService(
     {
         var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
+            throw new NotFoundException($"Accompaniment with ID {id} not found");
 
         context.Accompaniments.Remove(accompaniment);
         await context.SaveChangesAsync();
@@ -182,7 +183,7 @@ public class AccompanimentService(
     {
         var accompaniment = await context.Accompaniments.FindAsync(id);
         if (accompaniment == null)
-            throw new KeyNotFoundException($"Accompaniment with ID {id} not found");
+            throw new NotFoundException($"Accompaniment with ID {id} not found");
 
         accompaniment.IsAvailable = !accompaniment.IsAvailable;
         await context.SaveChangesAsync();

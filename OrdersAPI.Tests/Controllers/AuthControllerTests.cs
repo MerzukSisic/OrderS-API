@@ -100,7 +100,6 @@ public class AuthControllerTests
             FullName = "New User",
             Email = "newuser@example.com",
             Password = "Password123",
-            Role = "Waiter",
             PhoneNumber = "+38761123456"
         };
 
@@ -142,8 +141,7 @@ public class AuthControllerTests
         {
             FullName = "Test User",
             Email = "existing@example.com",
-            Password = "Password123",
-            Role = "Waiter"
+            Password = "Password123"
         };
 
         _authServiceMock
@@ -386,14 +384,14 @@ public class AuthControllerTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _controller.ForgotPassword(email);
+        var result = await _controller.ForgotPassword(new ForgotPasswordDto { Email = email });
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
-        okResult!.Value.Should().BeEquivalentTo(new 
-        { 
-            message = "If the email exists, a password reset link has been sent." 
+        okResult!.Value.Should().BeEquivalentTo(new
+        {
+            message = "If the email exists, a password reset link has been sent."
         });
 
         _authServiceMock.Verify(x => x.RequestPasswordResetAsync(email), Times.Once);

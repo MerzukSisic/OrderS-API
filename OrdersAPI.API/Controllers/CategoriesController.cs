@@ -12,10 +12,12 @@ public class CategoriesController(ICategoryService categoryService) : Controller
 {
     [HttpGet]
     [AllowAnonymous]
-    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
     {
-        var categories = await categoryService.GetAllCategoriesAsync();
-        return Ok(categories);
+        var result = await categoryService.GetAllCategoriesAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("{id}")]

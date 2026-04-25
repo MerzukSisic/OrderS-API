@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -12,8 +13,9 @@ public class ProductService(
     ApplicationDbContext context,
     ILogger<ProductService> logger) : IProductService
 {
-    public async Task<IEnumerable<ProductDto>> GetAllProductsAsync(Guid? categoryId = null, bool? isAvailable = null)
+    public async Task<PagedResult<ProductDto>> GetAllProductsAsync(Guid? categoryId = null, bool? isAvailable = null, int page = 1, int pageSize = 50)
     {
+        var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Products
             .AsNoTracking()
             .Include(p => p.Category)
@@ -27,8 +29,12 @@ public class ProductService(
         if (isAvailable.HasValue)
             query = query.Where(p => p.IsAvailable == isAvailable.Value);
 
+        var totalCount = await query.CountAsync();
+
         var products = await query
             .OrderBy(p => p.Name)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(p => new ProductDto
             {
                 Id = p.Id,
@@ -52,11 +58,11 @@ public class ProductService(
                     Quantity = pi.Quantity,
                     Unit = pi.StoreProduct.Unit.ToString()
                 }).ToList(),
-                AccompanimentGroups = new List<AccompanimentGroupDto>() // Populate if needed
+                AccompanimentGroups = new List<AccompanimentGroupDto>()
             })
             .ToListAsync();
 
-        return products;
+        return new PagedResult<ProductDto> { Items = products, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<ProductDto> GetProductByIdAsync(Guid id)
@@ -115,7 +121,7 @@ public class ProductService(
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (product == null)
-            throw new KeyNotFoundException($"Product with ID {id} not found");
+            throw new NotFoundException($"Product with ID {id} not found");
 
         return product;
     }
@@ -124,7 +130,7 @@ public class ProductService(
     {
         var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId);
         if (!categoryExists)
-            throw new KeyNotFoundException($"Category with ID {dto.CategoryId} not found");
+            throw new NotFoundException($"Category with ID {dto.CategoryId} not found");
 
         // Validate all ingredients exist
         var ingredientIds = dto.Ingredients.Select(i => i.StoreProductId).ToList();
@@ -135,7 +141,7 @@ public class ProductService(
 
         var missingIngredients = ingredientIds.Except(existingIngredients).ToList();
         if (missingIngredients.Any())
-            throw new KeyNotFoundException($"Store products not found: {string.Join(", ", missingIngredients)}");
+            throw new NotFoundException($"Store products not found: {string.Join(", ", missingIngredients)}");
 
         var product = new Product
         {
@@ -183,13 +189,13 @@ public class ProductService(
         .FirstOrDefaultAsync(p => p.Id == id);
 
     if (product == null)
-        throw new KeyNotFoundException($"Product with ID {id} not found");
+        throw new NotFoundException($"Product with ID {id} not found");
 
     if (dto.CategoryId.HasValue)
     {
         var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId.Value);
         if (!categoryExists)
-            throw new KeyNotFoundException($"Category with ID {dto.CategoryId} not found");
+            throw new NotFoundException($"Category with ID {dto.CategoryId} not found");
     }
 
     // Update basic properties
@@ -276,7 +282,7 @@ public class ProductService(
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (product == null)
-            throw new KeyNotFoundException($"Product with ID {id} not found");
+            throw new NotFoundException($"Product with ID {id} not found");
 
         // Check if product is used in any active orders
         var hasActiveOrders = await context.OrderItems
@@ -284,7 +290,7 @@ public class ProductService(
                 (oi.Order.Status == OrderStatus.Pending || oi.Order.Status == OrderStatus.Preparing));
 
         if (hasActiveOrders)
-            throw new InvalidOperationException("Cannot delete product with active orders");
+            throw new BusinessException("Cannot delete product with active orders");
 
         context.Products.Remove(product);
         await context.SaveChangesAsync();
@@ -295,7 +301,7 @@ public class ProductService(
     public async Task<IEnumerable<ProductDto>> SearchProductsAsync(string searchTerm)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
-            return await GetAllProductsAsync();
+            return (await GetAllProductsAsync()).Items;
 
         var products = await context.Products
             .AsNoTracking()
@@ -339,7 +345,7 @@ public class ProductService(
     {
         var product = await context.Products.FindAsync(productId);
         if (product == null)
-            throw new KeyNotFoundException($"Product with ID {productId} not found");
+            throw new NotFoundException($"Product with ID {productId} not found");
 
         product.IsAvailable = !product.IsAvailable;
         product.UpdatedAt = DateTime.UtcNow;

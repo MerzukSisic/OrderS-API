@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -8,10 +9,15 @@ namespace OrdersAPI.Infrastructure.Services;
 
 public class StoreService(ApplicationDbContext context) : IStoreService
 {
-    public async Task<IEnumerable<StoreDto>> GetAllStoresAsync()
+    public async Task<PagedResult<StoreDto>> GetAllStoresAsync(int page = 1, int pageSize = 100)
     {
-        return await context.Stores
-            .Include(s => s.StoreProducts)
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Stores.Include(s => s.StoreProducts).AsNoTracking();
+        var totalCount = await query.CountAsync();
+        var stores = await query
+            .OrderBy(s => s.Name)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(s => new StoreDto
             {
                 Id = s.Id,
@@ -24,6 +30,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
                 LowStockProductsCount = s.StoreProducts.Count(p => p.CurrentStock < p.MinimumStock)
             })
             .ToListAsync();
+        return new PagedResult<StoreDto> { Items = stores, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<StoreDto> GetStoreByIdAsync(Guid id)
@@ -33,7 +40,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
             .FirstOrDefaultAsync(s => s.Id == id);
 
         if (store == null)
-            throw new KeyNotFoundException($"Store with ID {id} not found");
+            throw new NotFoundException($"Store with ID {id} not found");
 
         return new StoreDto
         {
@@ -69,7 +76,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
     {
         var store = await context.Stores.FindAsync(id);
         if (store == null)
-            throw new KeyNotFoundException($"Store with ID {id} not found");
+            throw new NotFoundException($"Store with ID {id} not found");
 
         if (!string.IsNullOrEmpty(dto.Name))
             store.Name = dto.Name;
@@ -93,11 +100,11 @@ public class StoreService(ApplicationDbContext context) : IStoreService
             .FirstOrDefaultAsync(s => s.Id == id);
 
         if (store == null)
-            throw new KeyNotFoundException($"Store with ID {id} not found");
+            throw new NotFoundException($"Store with ID {id} not found");
 
         // Provjeri da li ima proizvoda
         if (store.StoreProducts.Any())
-            throw new InvalidOperationException("Cannot delete store with products. Remove products first.");
+            throw new BusinessException("Cannot delete store with products. Remove products first.");
 
         context.Stores.Remove(store);
         await context.SaveChangesAsync();

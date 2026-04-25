@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -11,8 +12,9 @@ namespace OrdersAPI.Infrastructure.Services;
 public class NotificationService(ApplicationDbContext context, ILogger<NotificationService> logger)
     : INotificationService
 {
-    public async Task<IEnumerable<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false)
+    public async Task<PagedResult<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false, int page = 1, int pageSize = 50)
     {
+        var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Notifications
             .AsNoTracking()
             .Where(n => n.UserId == userId)
@@ -21,8 +23,12 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
         if (unreadOnly)
             query = query.Where(n => !n.IsRead);
 
+        var totalCount = await query.CountAsync();
+
         var notifications = await query
             .OrderByDescending(n => n.CreatedAt)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(n => new NotificationDto
             {
                 Id = n.Id,
@@ -35,14 +41,14 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
             })
             .ToListAsync();
 
-        return notifications;
+        return new PagedResult<NotificationDto> { Items = notifications, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<NotificationDto> CreateNotificationAsync(Guid userId, string title, string message, string type)
     {
         var userExists = await context.Users.AnyAsync(u => u.Id == userId);
         if (!userExists)
-            throw new KeyNotFoundException($"User with ID {userId} not found");
+            throw new NotFoundException($"User with ID {userId} not found");
 
         var notification = new Notification
         {
@@ -77,7 +83,7 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
     {
         var notification = await context.Notifications.FindAsync(notificationId);
         if (notification == null)
-            throw new KeyNotFoundException($"Notification with ID {notificationId} not found");
+            throw new NotFoundException($"Notification with ID {notificationId} not found");
 
         if (!notification.IsRead)
         {
@@ -92,7 +98,7 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
     {
         var notification = await context.Notifications.FindAsync(notificationId);
         if (notification == null)
-            throw new KeyNotFoundException($"Notification with ID {notificationId} not found");
+            throw new NotFoundException($"Notification with ID {notificationId} not found");
 
         context.Notifications.Remove(notification);
         await context.SaveChangesAsync();

@@ -6,7 +6,7 @@ namespace OrdersAPI.Application.Interfaces;
 
 public interface ITableService
 {
-    Task<IEnumerable<TableDto>> GetAllTablesAsync();
+    Task<PagedResult<TableDto>> GetAllTablesAsync(int page = 1, int pageSize = 100);
     Task<TableDto> GetTableByIdAsync(Guid id);
     Task<TableDto> CreateTableAsync(CreateTableDto dto);
     Task UpdateTableAsync(Guid id, UpdateTableDto dto);

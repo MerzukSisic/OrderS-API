@@ -1,4 +1,5 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using OrdersAPI.Domain.Exceptions;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -15,9 +16,10 @@ using OrdersAPI.Infrastructure.Data;
 namespace OrdersAPI.Infrastructure.Services;
 
 public class AuthService(
-    ApplicationDbContext context, 
-    IConfiguration configuration, 
-    ILogger<AuthService> logger)
+    ApplicationDbContext context,
+    IConfiguration configuration,
+    ILogger<AuthService> logger,
+    IEmailSender emailSender)
     : IAuthService
 {
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
@@ -36,8 +38,10 @@ public class AuthService(
             throw new UnauthorizedAccessException("User account is inactive");
         }
 
-        var token = GenerateJwtToken(user);
-        var refreshToken = GenerateRefreshToken();
+        var accessToken = GenerateJwtToken(user);
+        var refreshToken = GenerateSecureToken();
+
+        await PersistRefreshTokenAsync(user.Id, refreshToken);
 
         logger.LogInformation("User {Email} logged in successfully", user.Email);
 
@@ -47,7 +51,7 @@ public class AuthService(
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
-            AccessToken = token,
+            AccessToken = accessToken,
             RefreshToken = refreshToken
         };
     }
@@ -57,7 +61,7 @@ public class AuthService(
         if (await context.Users.AnyAsync(u => u.Email == dto.Email))
         {
             logger.LogWarning("Registration attempt with existing email: {Email}", dto.Email);
-            throw new InvalidOperationException("Email already exists");
+            throw new ConflictException("Email already exists");
         }
 
         var user = new User
@@ -66,7 +70,7 @@ public class AuthService(
             FullName = dto.FullName,
             Email = dto.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = Enum.Parse<UserRole>(dto.Role),
+            Role = UserRole.Waiter,
             PhoneNumber = dto.PhoneNumber,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -76,8 +80,10 @@ public class AuthService(
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        var token = GenerateJwtToken(user);
-        var refreshToken = GenerateRefreshToken();
+        var accessToken = GenerateJwtToken(user);
+        var refreshToken = GenerateSecureToken();
+
+        await PersistRefreshTokenAsync(user.Id, refreshToken);
 
         logger.LogInformation("User {Email} registered successfully", user.Email);
 
@@ -87,7 +93,7 @@ public class AuthService(
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
-            AccessToken = token,
+            AccessToken = accessToken,
             RefreshToken = refreshToken
         };
     }
@@ -121,25 +127,87 @@ public class AuthService(
 
     public async Task<AuthResponseDto> RefreshTokenAsync(string refreshToken)
     {
-        logger.LogInformation("Refresh token requested");
-        
-        throw new NotImplementedException("Refresh token functionality requires database storage. Implement RefreshToken entity first.");
+        var tokenHash = HashToken(refreshToken);
+
+        var storedToken = await context.RefreshTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+
+        if (storedToken == null)
+            throw new UnauthorizedAccessException("Invalid refresh token");
+
+        if (storedToken.IsRevoked)
+            throw new UnauthorizedAccessException("Refresh token has been revoked");
+
+        if (storedToken.ExpiresAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Refresh token has expired");
+
+        if (!storedToken.User.IsActive)
+            throw new UnauthorizedAccessException("User account is inactive");
+
+        // Revoke old token (rotation — old token cannot be reused)
+        storedToken.IsRevoked = true;
+        storedToken.RevokedAt = DateTime.UtcNow;
+
+        // Issue new tokens
+        var newAccessToken = GenerateJwtToken(storedToken.User);
+        var newRefreshToken = GenerateSecureToken();
+        var newHash = HashToken(newRefreshToken);
+
+        context.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = storedToken.UserId,
+            TokenHash = newHash,
+            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            IsRevoked = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Refresh token rotated for user {UserId}", storedToken.UserId);
+
+        return new AuthResponseDto
+        {
+            UserId = storedToken.User.Id,
+            Email = storedToken.User.Email,
+            FullName = storedToken.User.FullName,
+            Role = storedToken.User.Role.ToString(),
+            AccessToken = newAccessToken,
+            RefreshToken = newRefreshToken
+        };
     }
 
     public async Task LogoutAsync(Guid userId)
     {
         var user = await context.Users.FindAsync(userId);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {userId} not found");
+            throw new NotFoundException($"User with ID {userId} not found");
 
-        logger.LogInformation("User {Email} logged out", user.Email);
+        // Revoke all active refresh tokens so the client cannot reuse them
+        var activeTokens = await context.RefreshTokens
+            .Where(t => t.UserId == userId && !t.IsRevoked)
+            .ToListAsync();
+
+        foreach (var token in activeTokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = DateTime.UtcNow;
+        }
+
+        if (activeTokens.Count > 0)
+            await context.SaveChangesAsync();
+
+        logger.LogInformation("User {Email} logged out, {Count} refresh token(s) revoked",
+            user.Email, activeTokens.Count);
     }
 
     public async Task ChangePasswordAsync(Guid userId, ChangePasswordDto dto)
     {
         var user = await context.Users.FindAsync(userId);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {userId} not found");
+            throw new NotFoundException($"User with ID {userId} not found");
 
         if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
         {
@@ -159,7 +227,7 @@ public class AuthService(
     {
         var user = await context.Users.FindAsync(userId);
         if (user == null)
-            throw new KeyNotFoundException($"User with ID {userId} not found");
+            throw new NotFoundException($"User with ID {userId} not found");
 
         return new UserDto
         {
@@ -178,29 +246,104 @@ public class AuthService(
         var user = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user == null)
         {
+            // Do not reveal whether the email is registered (prevents enumeration)
             logger.LogWarning("Password reset requested for non-existent email: {Email}", email);
             return;
         }
 
-        logger.LogInformation("Password reset requested for user {Email}", email);
-        
-        throw new NotImplementedException("Password reset requires email service implementation and token storage.");
+        // Invalidate any existing unused reset tokens for this user
+        var existingTokens = await context.PasswordResetTokens
+            .Where(t => t.UserId == user.Id && !t.IsUsed && t.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+        foreach (var t in existingTokens)
+            t.IsUsed = true;
+
+        // Generate and persist new one-time reset token
+        var plainToken = GenerateSecureToken();
+        context.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = HashToken(plainToken),
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            IsUsed = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        await emailSender.SendAsync(
+            user.Email,
+            "Password Reset Request – OrderS",
+            $"<p>Hello {user.FullName},</p>" +
+            $"<p>Your password reset token is:</p>" +
+            $"<p><strong>{plainToken}</strong></p>" +
+            $"<p>This token expires in <strong>1 hour</strong> and can only be used once.</p>" +
+            $"<p>If you did not request a password reset, ignore this email.</p>");
+
+        logger.LogInformation("Password reset token sent to {Email}", email);
     }
 
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
         var user = await context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
         if (user == null)
-            throw new KeyNotFoundException("Invalid reset token");
+            throw new UnauthorizedAccessException("Invalid reset token");
 
-        logger.LogInformation("Password reset for user {Email}", dto.Email);
-        
-        throw new NotImplementedException("Password reset requires token validation implementation.");
+        var tokenHash = HashToken(dto.Token);
+        var resetToken = await context.PasswordResetTokens
+            .FirstOrDefaultAsync(t => t.UserId == user.Id && t.TokenHash == tokenHash);
+
+        if (resetToken == null)
+            throw new UnauthorizedAccessException("Invalid reset token");
+
+        if (resetToken.IsUsed)
+            throw new UnauthorizedAccessException("Reset token has already been used");
+
+        if (resetToken.ExpiresAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Reset token has expired");
+
+        // Update password
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Mark token as used (one-time use)
+        resetToken.IsUsed = true;
+
+        // Force re-login on all devices by revoking all refresh tokens
+        var activeRefreshTokens = await context.RefreshTokens
+            .Where(t => t.UserId == user.Id && !t.IsRevoked)
+            .ToListAsync();
+        foreach (var rt in activeRefreshTokens)
+        {
+            rt.IsRevoked = true;
+            rt.RevokedAt = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Password reset successfully for user {Email}", dto.Email);
+    }
+
+    // ==================== PRIVATE HELPERS ====================
+
+    private async Task PersistRefreshTokenAsync(Guid userId, string plainToken)
+    {
+        context.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = HashToken(plainToken),
+            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            IsRevoked = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
     }
 
     private string GenerateJwtToken(User user)
     {
-        var key = configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key not configured");
+        var key = configuration["Jwt:Key"] ?? throw new BusinessException("JWT key not configured");
         var issuer = configuration["Jwt:Issuer"];
         var audience = configuration["Jwt:Audience"];
 
@@ -226,11 +369,17 @@ public class AuthService(
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private static string GenerateRefreshToken()
+    private static string GenerateSecureToken()
     {
-        var randomNumber = new byte[64];
+        var bytes = new byte[64];
         using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(randomNumber);
-        return Convert.ToBase64String(randomNumber);
+        rng.GetBytes(bytes);
+        return Convert.ToBase64String(bytes);
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
     }
 }

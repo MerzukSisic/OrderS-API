@@ -129,6 +129,12 @@ builder.Services.AddScoped<IStoreService, StoreService>();
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
 
+// Email Sender: use SmtpEmailSender when Email:Driver = "smtp", otherwise log-only dev sender
+if (builder.Configuration["Email:Driver"]?.ToLower() == "smtp")
+    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+else
+    builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+
 // ✅ GLOBAL EXCEPTION HANDLER
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -197,9 +203,7 @@ app.MapHub<OrderHub>("/hubs/orders");
 app.MapControllers();
 
 // ==================== RUN ====================
-Console.WriteLine("🚀 OrderS API is running!");
-Console.WriteLine("📍 API: http://localhost:5220/api");
-Console.WriteLine("📖 Swagger: http://localhost:5220/swagger");
-Console.WriteLine("🔔 SignalR Hub: http://localhost:5220/hubs/orders");
+var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+startupLogger.LogInformation("OrderS API is running. API: http://localhost:5220/api | Swagger: http://localhost:5220/swagger | SignalR: http://localhost:5220/hubs/orders");
 
 app.Run();

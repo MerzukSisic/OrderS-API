@@ -4,7 +4,7 @@ namespace OrdersAPI.Application.Interfaces;
 
 public interface INotificationService
 {
-    Task<IEnumerable<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false);
+    Task<PagedResult<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false, int page = 1, int pageSize = 50);
     Task<NotificationDto> CreateNotificationAsync(Guid userId, string title, string message, string type);
     Task MarkAsReadAsync(Guid notificationId);
     Task DeleteNotificationAsync(Guid notificationId);

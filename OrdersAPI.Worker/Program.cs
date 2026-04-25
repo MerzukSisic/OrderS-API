@@ -23,12 +23,19 @@ builder.Services.AddMassTransit(x =>
         var rabbitPort = ushort.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
         var rabbitUser = builder.Configuration["RabbitMQ:User"] ?? "guest";
         var rabbitPassword = builder.Configuration["RabbitMQ:Password"] ?? "guest";
-        
+
         cfg.Host(rabbitHost, rabbitPort, "/", h =>
         {
             h.Username(rabbitUser);
             h.Password(rabbitPassword);
         });
+
+        cfg.UseMessageRetry(r => r.Exponential(
+            retryLimit: 5,
+            minInterval: TimeSpan.FromSeconds(1),
+            maxInterval: TimeSpan.FromSeconds(30),
+            intervalDelta: TimeSpan.FromSeconds(2)));
+
         cfg.ConfigureEndpoints(context);
     });
 });

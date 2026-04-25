@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
@@ -10,10 +11,14 @@ namespace OrdersAPI.Infrastructure.Services;
 public class CategoryService(ApplicationDbContext context, ILogger<CategoryService> logger)
     : ICategoryService
 {
-    public async Task<IEnumerable<CategoryDto>> GetAllCategoriesAsync()
+    public async Task<PagedResult<CategoryDto>> GetAllCategoriesAsync(int page = 1, int pageSize = 100)
     {
-        var categories = await context.Categories
-            .AsNoTracking()
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Categories.AsNoTracking().OrderBy(c => c.Name);
+        var totalCount = await query.CountAsync();
+        var categories = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(c => new CategoryDto
             {
                 Id = c.Id,
@@ -24,8 +29,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
                 CreatedAt = c.CreatedAt
             })
             .ToListAsync();
-
-        return categories;
+        return new PagedResult<CategoryDto> { Items = categories, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<CategoryDto> GetCategoryByIdAsync(Guid id)
@@ -44,7 +48,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (category == null)
-            throw new KeyNotFoundException($"Category with ID {id} not found");
+            throw new NotFoundException($"Category with ID {id} not found");
 
         return category;
     }
@@ -57,7 +61,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (category == null)
-            throw new KeyNotFoundException($"Category with ID {id} not found");
+            throw new NotFoundException($"Category with ID {id} not found");
 
         var dto = new CategoryWithProductsDto
         {
@@ -115,7 +119,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
     {
         var category = await context.Categories.FindAsync(id);
         if (category == null)
-            throw new KeyNotFoundException($"Category with ID {id} not found");
+            throw new NotFoundException($"Category with ID {id} not found");
 
         if (dto.Name != null) category.Name = dto.Name;
         if (dto.Description != null) category.Description = dto.Description;
@@ -133,10 +137,10 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (category == null)
-            throw new KeyNotFoundException($"Category with ID {id} not found");
+            throw new NotFoundException($"Category with ID {id} not found");
 
         if (category.Products.Any())
-            throw new InvalidOperationException($"Cannot delete category with {category.Products.Count} products. Delete or reassign products first.");
+            throw new BusinessException($"Cannot delete category with {category.Products.Count} products. Delete or reassign products first.");
 
         context.Categories.Remove(category);
         await context.SaveChangesAsync();

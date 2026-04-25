@@ -22,6 +22,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<AccompanimentGroup> AccompanimentGroups => Set<AccompanimentGroup>();
     public DbSet<Accompaniment> Accompaniments => Set<Accompaniment>();
     public DbSet<OrderItemAccompaniment> OrderItemAccompaniments => Set<OrderItemAccompaniment>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -234,6 +236,30 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany(e => e.OrderItemAccompaniments)
                 .HasForeignKey(e => e.AccompanimentId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // RefreshToken
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.TokenHash);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PasswordResetToken
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.TokenHash);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

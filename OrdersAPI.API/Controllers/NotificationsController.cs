@@ -12,11 +12,16 @@ namespace OrdersAPI.API.Controllers;
 public class NotificationsController(INotificationService notificationService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<NotificationDto>>> GetNotifications([FromQuery] bool unreadOnly = false)
+    public async Task<ActionResult<IEnumerable<NotificationDto>>> GetNotifications(
+        [FromQuery] bool unreadOnly = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var notifications = await notificationService.GetUserNotificationsAsync(userId, unreadOnly);
-        return Ok(notifications);
+        var result = await notificationService.GetUserNotificationsAsync(userId, unreadOnly, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("unread-count")]

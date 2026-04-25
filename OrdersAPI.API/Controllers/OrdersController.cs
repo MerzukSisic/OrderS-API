@@ -33,10 +33,16 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         [FromQuery] Guid? waiterId = null,
         [FromQuery] DateTime? fromDate = null,
         [FromQuery] DateTime? toDate = null,
-        [FromQuery] OrderStatus? status = null)
+        [FromQuery] OrderStatus? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var orders = await orderService.GetOrdersAsync(waiterId, fromDate, toDate, status);
-        return Ok(orders);
+        var result = await orderService.GetOrdersAsync(waiterId, fromDate, toDate, status, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("active")]

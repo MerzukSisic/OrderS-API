@@ -2,7 +2,7 @@
 
   # ==================== RABBITMQ ====================
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management
     container_name: orders_rabbitmq
     ports:
       - "5672:5672"
@@ -21,7 +21,7 @@
 
   # ==================== SQL SERVER ====================
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
     container_name: orders_sqlserver
     ports:
       - "1433:1433"

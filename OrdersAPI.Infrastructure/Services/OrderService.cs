@@ -1,3 +1,4 @@
+using OrdersAPI.Domain.Exceptions;
 ﻿using MassTransit;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -29,17 +30,17 @@ public class OrderService(
             // Validate waiter exists
             var waiterExists = await context.Users.AnyAsync(u => u.Id == waiterId && u.IsActive);
             if (!waiterExists)
-                throw new KeyNotFoundException($"Waiter with ID {waiterId} not found");
+                throw new NotFoundException($"Waiter with ID {waiterId} not found");
 
             // Validate table if DineIn
             if (dto.Type == "DineIn" && !dto.TableId.HasValue)
-                throw new InvalidOperationException("TableId is required for DineIn orders");
+                throw new BusinessException("TableId is required for DineIn orders");
 
             if (dto.TableId.HasValue)
             {
                 var table = await context.CafeTables.FindAsync(dto.TableId.Value);
                 if (table == null)
-                    throw new KeyNotFoundException($"Table with ID {dto.TableId} not found");
+                    throw new NotFoundException($"Table with ID {dto.TableId} not found");
             }
 
             var order = new Order
@@ -68,10 +69,10 @@ public class OrderService(
                     .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
 
                 if (product == null || !product.IsAvailable)
-                    throw new InvalidOperationException($"Product {itemDto.ProductId} is not available");
+                    throw new BusinessException($"Product {itemDto.ProductId} is not available");
 
                 if (product.Stock < itemDto.Quantity)
-                    throw new InvalidOperationException($"Insufficient stock for {product.Name}. Available: {product.Stock}");
+                    throw new BusinessException($"Insufficient stock for {product.Name}. Available: {product.Stock}");
 
                 // Validate accompaniments
                 if (itemDto.SelectedAccompanimentIds.Any())
@@ -82,7 +83,7 @@ public class OrderService(
                     );
 
                     if (!validationResult.IsValid)
-                        throw new InvalidOperationException(
+                        throw new BusinessException(
                             $"Accompaniment validation failed: {string.Join(", ", validationResult.Errors)}"
                         );
                 }
@@ -286,7 +287,7 @@ public class OrderService(
             .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {id} not found");
+            throw new NotFoundException($"Order with ID {id} not found");
 
         return new OrderDto
         {
@@ -325,12 +326,15 @@ public class OrderService(
         };
     }
 
-    public async Task<IEnumerable<OrderDto>> GetOrdersAsync(
-        Guid? waiterId = null, 
-        DateTime? fromDate = null, 
-        DateTime? toDate = null, 
-        OrderStatus? status = null)
+    public async Task<PagedResult<OrderDto>> GetOrdersAsync(
+        Guid? waiterId = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        OrderStatus? status = null,
+        int page = 1,
+        int pageSize = 50)
     {
+        var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Orders
             .AsNoTracking()
             .Include(o => o.Waiter)
@@ -351,11 +355,15 @@ public class OrderService(
         if (toDate.HasValue)
             query = query.Where(o => o.CreatedAt <= toDate);
 
+        var totalCount = await query.CountAsync();
+
         var orders = await query
             .OrderByDescending(o => o.CreatedAt)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .ToListAsync();
 
-        return orders.Select(o => new OrderDto
+        var items = orders.Select(o => new OrderDto
         {
             Id = o.Id,
             WaiterId = o.WaiterId,
@@ -384,6 +392,8 @@ public class OrderService(
                 CreatedAt = i.CreatedAt
             }).ToList()
         }).ToList();
+
+        return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task UpdateOrderStatusAsync(Guid id, OrderStatus status)
@@ -394,7 +404,7 @@ public class OrderService(
             .FirstOrDefaultAsync(o => o.Id == id);
             
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {id} not found");
+            throw new NotFoundException($"Order with ID {id} not found");
 
         order.Status = status;
         order.UpdatedAt = DateTime.UtcNow;
@@ -451,15 +461,10 @@ public class OrderService(
 
     public async Task<IEnumerable<OrderDto>> GetActiveOrdersAsync()
     {
-        return await GetOrdersAsync(
-            status: null, 
-            waiterId: null, 
-            fromDate: null, 
-            toDate: null
-        ).ContinueWith(t => t.Result.Where(o => 
-            o.Status != OrderStatus.Completed.ToString() && 
-            o.Status != OrderStatus.Cancelled.ToString()
-        ));
+        var result = await GetOrdersAsync(pageSize: 100);
+        return result.Items.Where(o =>
+            o.Status != OrderStatus.Completed.ToString() &&
+            o.Status != OrderStatus.Cancelled.ToString());
     }
 
     public async Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status)
@@ -470,7 +475,7 @@ public class OrderService(
             .FirstOrDefaultAsync(oi => oi.Id == orderItemId);
             
         if (orderItem == null)
-            throw new KeyNotFoundException($"Order item with ID {orderItemId} not found");
+            throw new NotFoundException($"Order item with ID {orderItemId} not found");
 
         orderItem.Status = status;
 
@@ -541,10 +546,10 @@ public class OrderService(
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {orderId} not found");
+            throw new NotFoundException($"Order with ID {orderId} not found");
 
         if (order.Status == OrderStatus.Completed)
-            throw new InvalidOperationException("Cannot cancel completed order");
+            throw new BusinessException("Cannot cancel completed order");
 
         // Restore stock
         foreach (var item in order.Items)
@@ -605,10 +610,10 @@ public class OrderService(
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
-            throw new KeyNotFoundException($"Order with ID {orderId} not found");
+            throw new NotFoundException($"Order with ID {orderId} not found");
 
         if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled)
-            throw new InvalidOperationException("Cannot add items to completed or cancelled order");
+            throw new BusinessException("Cannot add items to completed or cancelled order");
 
         var product = await context.Products
             .Include(p => p.ProductIngredients)
@@ -616,10 +621,10 @@ public class OrderService(
             .FirstOrDefaultAsync(p => p.Id == dto.ProductId);
 
         if (product == null || !product.IsAvailable)
-            throw new InvalidOperationException($"Product {dto.ProductId} is not available");
+            throw new BusinessException($"Product {dto.ProductId} is not available");
 
         if (product.Stock < dto.Quantity)
-            throw new InvalidOperationException($"Insufficient stock for {product.Name}");
+            throw new BusinessException($"Insufficient stock for {product.Name}");
 
         // Validate accompaniments
         if (dto.SelectedAccompanimentIds.Any())
@@ -630,7 +635,7 @@ public class OrderService(
             );
 
             if (!validationResult.IsValid)
-                throw new InvalidOperationException(
+                throw new BusinessException(
                     $"Accompaniment validation failed: {string.Join(", ", validationResult.Errors)}"
                 );
         }
@@ -745,8 +750,8 @@ public class OrderService(
 
     public async Task<List<OrderDto>> GetOrdersByTableAsync(Guid tableId)
     {
-        var orders = await GetOrdersAsync();
-        return orders.Where(o => o.TableId == tableId).ToList();
+        var result = await GetOrdersAsync(pageSize: 100);
+        return result.Items.Where(o => o.TableId == tableId).ToList();
     }
 
     public async Task CompleteOrderAsync(Guid orderId)

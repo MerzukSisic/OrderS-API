@@ -13,10 +13,12 @@ namespace OrdersAPI.API.Controllers;
 public class TablesController(ITableService tableService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TableDto>>> GetTables()
+    public async Task<ActionResult<IEnumerable<TableDto>>> GetTables([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
     {
-        var tables = await tableService.GetAllTablesAsync();
-        return Ok(tables);
+        var result = await tableService.GetAllTablesAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("{id}")]

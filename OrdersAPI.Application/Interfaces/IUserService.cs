@@ -6,7 +6,7 @@ namespace OrdersAPI.Application.Interfaces;
 
 public interface IUserService
 {
-    Task<IEnumerable<UserDto>> GetAllUsersAsync();
+    Task<PagedResult<UserDto>> GetAllUsersAsync(int page = 1, int pageSize = 50);
     Task<UserDto> GetUserByIdAsync(Guid id);
     Task<UserDto> CreateUserAsync(CreateUserDto dto);
     Task UpdateUserAsync(Guid id, UpdateUserDto dto);
@@ -15,5 +15,5 @@ public interface IUserService
     Task<List<UserDto>> GetUsersByRoleAsync(UserRole role);
     Task DeactivateUserAsync(Guid id);
     Task ActivateUserAsync(Guid id);
-    Task<List<UserDto>> GetActiveUsersAsync();
+    Task<PagedResult<UserDto>> GetActiveUsersAsync(int page = 1, int pageSize = 50);
 }

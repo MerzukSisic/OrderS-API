@@ -126,68 +126,103 @@ public class PaymentsController(
 
     private async Task HandleCheckoutSessionCompleted(WebhookEventDto eventDto)
     {
-        logger.LogInformation("✅ Processing checkout.session.completed");
+        logger.LogInformation("✅ Processing checkout.session.completed for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
 
-        if (string.IsNullOrEmpty(eventDto.PaymentIntentId))
+        // 1. Resolve by explicit procurement order ID from session metadata (most reliable)
+        if (!string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
+            Guid.TryParse(eventDto.ProcurementOrderId, out var metadataOrderId))
         {
-            logger.LogWarning("⚠️ Checkout session completed but no payment intent ID");
-            return;
+            var order = await context.ProcurementOrders.FindAsync(metadataOrderId);
+            if (order != null)
+            {
+                if (order.Status == ProcurementStatus.Paid)
+                {
+                    logger.LogInformation("ℹ️ Order {OrderId} already paid, skipping (idempotent)", order.Id);
+                    return;
+                }
+                if (order.Status != ProcurementStatus.Pending)
+                {
+                    logger.LogWarning("⚠️ Order {OrderId} is in status {Status}, cannot transition to Paid", order.Id, order.Status);
+                    return;
+                }
+                order.Status = ProcurementStatus.Paid;
+                order.StripePaymentIntentId = eventDto.PaymentIntentId;
+                await context.SaveChangesAsync();
+                logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via checkout metadata", order.Id);
+                return;
+            }
         }
 
-        // Extract procurement order ID from metadata (passed when creating session)
-        // We need to get the full session to access metadata
-        // For now, we search by payment intent ID once it's available
-        
-        // Find procurement order that matches this payment intent
-        var procurementOrder = await context.ProcurementOrders
-            .Where(o => o.Status == ProcurementStatus.Pending)
-            .OrderByDescending(o => o.OrderDate)
-            .FirstOrDefaultAsync();
-
-        if (procurementOrder != null)
+        // 2. Fallback: lookup by PaymentIntentId (already stored from confirm-payment call)
+        if (!string.IsNullOrEmpty(eventDto.PaymentIntentId))
         {
-            procurementOrder.Status = ProcurementStatus.Paid;
-            procurementOrder.StripePaymentIntentId = eventDto.PaymentIntentId;
-            await context.SaveChangesAsync();
-
-            logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via webhook (amount: {Amount})",
-                procurementOrder.Id, eventDto.Amount);
-            return;
+            var order = await context.ProcurementOrders
+                .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
+            if (order != null)
+            {
+                if (order.Status == ProcurementStatus.Paid) return;
+                if (order.Status != ProcurementStatus.Pending)
+                {
+                    logger.LogWarning("⚠️ Order {OrderId} is in status {Status}, cannot transition to Paid (PI fallback)", order.Id, order.Status);
+                    return;
+                }
+                order.Status = ProcurementStatus.Paid;
+                await context.SaveChangesAsync();
+                logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via PI fallback", order.Id);
+                return;
+            }
         }
 
-        logger.LogWarning("⚠️ No pending procurement order found for payment intent: {PaymentIntentId}", 
-            eventDto.PaymentIntentId);
+        logger.LogWarning("⚠️ No matching procurement order found for checkout webhook PI: {PaymentIntentId}", eventDto.PaymentIntentId);
     }
 
     private async Task HandlePaymentSucceeded(WebhookEventDto eventDto)
     {
-        logger.LogInformation("💰 Payment succeeded for intent: {PaymentIntentId}, amount: {Amount}",
+        logger.LogInformation("💰 payment_intent.succeeded: PI={PaymentIntentId} Amount={Amount}",
             eventDto.PaymentIntentId, eventDto.Amount);
 
+        // 1. Exact match by PaymentIntentId already stored on the order
         var procurementOrder = await context.ProcurementOrders
-            .Where(o => o.StripePaymentIntentId == eventDto.PaymentIntentId || 
-                       (o.Status == ProcurementStatus.Pending))
-            .OrderByDescending(o => o.OrderDate)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
 
-        if (procurementOrder != null && procurementOrder.Status == ProcurementStatus.Pending)
+        // 2. Metadata-based lookup (payment intent carries procurementOrderId in its metadata)
+        if (procurementOrder == null &&
+            !string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
+            Guid.TryParse(eventDto.ProcurementOrderId, out var procId))
         {
-            procurementOrder.Status = ProcurementStatus.Paid;
-            procurementOrder.StripePaymentIntentId = eventDto.PaymentIntentId;
-            await context.SaveChangesAsync();
-
-            logger.LogInformation("✅ Procurement order {OrderId} marked as PAID", procurementOrder.Id);
+            procurementOrder = await context.ProcurementOrders.FindAsync(procId);
         }
+
+        if (procurementOrder == null)
+        {
+            logger.LogInformation("ℹ️ payment_intent.succeeded: no matching procurement order – may be a regular order payment");
+            return;
+        }
+
+        // Idempotency: skip if already handled
+        if (procurementOrder.Status != ProcurementStatus.Pending)
+        {
+            logger.LogInformation("ℹ️ Order {OrderId} already in status {Status}, skipping", procurementOrder.Id, procurementOrder.Status);
+            return;
+        }
+
+        procurementOrder.Status = ProcurementStatus.Paid;
+        if (string.IsNullOrEmpty(procurementOrder.StripePaymentIntentId))
+            procurementOrder.StripePaymentIntentId = eventDto.PaymentIntentId;
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via payment_intent.succeeded", procurementOrder.Id);
     }
 
-    private async Task HandlePaymentFailed(WebhookEventDto eventDto)
+    private Task HandlePaymentFailed(WebhookEventDto eventDto)
     {
-        logger.LogWarning("❌ Payment FAILED for intent: {PaymentIntentId}", eventDto.PaymentIntentId);
+        logger.LogWarning("❌ Payment FAILED for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
+        return Task.CompletedTask;
     }
 
     private async Task HandleChargeRefunded(WebhookEventDto eventDto)
     {
-        logger.LogInformation("💸 Refund processed for payment intent: {PaymentIntentId}, amount: {Amount}",
+        logger.LogInformation("💸 charge.refunded for PI: {PaymentIntentId}, amount: {Amount}",
             eventDto.PaymentIntentId, eventDto.Amount);
 
         var procurementOrder = await context.ProcurementOrders
@@ -195,7 +230,7 @@ public class PaymentsController(
 
         if (procurementOrder != null)
         {
-            logger.LogInformation("💸 Procurement order {OrderId} was refunded", procurementOrder.Id);
+            logger.LogInformation("💸 Procurement order {OrderId} refunded", procurementOrder.Id);
         }
     }
 }
