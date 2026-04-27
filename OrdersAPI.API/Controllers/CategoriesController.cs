@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 
 namespace OrdersAPI.API.Controllers;
 
@@ -37,7 +38,7 @@ public class CategoriesController(ICategoryService categoryService) : Controller
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<CategoryDto>> CreateCategory([FromBody] CreateCategoryDto dto)
     {
         var category = await categoryService.CreateCategoryAsync(dto);
@@ -45,7 +46,7 @@ public class CategoriesController(ICategoryService categoryService) : Controller
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateCategory(Guid id, [FromBody] UpdateCategoryDto dto)
     {
         await categoryService.UpdateCategoryAsync(id, dto);
@@ -53,7 +54,7 @@ public class CategoriesController(ICategoryService categoryService) : Controller
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteCategory(Guid id)
     {
         await categoryService.DeleteCategoryAsync(id);

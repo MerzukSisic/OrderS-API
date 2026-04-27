@@ -10,12 +10,12 @@ public interface IOrderService
     Task<OrderDto> GetOrderByIdAsync(Guid id);
     Task<PagedResult<OrderDto>> GetOrdersAsync(Guid? waiterId = null, DateTime? fromDate = null, DateTime? toDate = null, OrderStatus? status = null, int page = 1, int pageSize = 50);
     Task UpdateOrderStatusAsync(Guid id, OrderStatus status);
-    Task<IEnumerable<OrderDto>> GetActiveOrdersAsync();
-    
+    Task<PagedResult<OrderDto>> GetActiveOrdersAsync(int page = 1, int pageSize = 50);
+
     Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status);
     Task CancelOrderAsync(Guid orderId, string reason);
     Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto);
-    Task<List<OrderDto>> GetOrdersByTableAsync(Guid tableId);
+    Task<PagedResult<OrderDto>> GetOrdersByTableAsync(Guid tableId, int page = 1, int pageSize = 50);
     Task CompleteOrderAsync(Guid orderId);
-    Task<List<OrderItemDto>> GetOrderItemsByLocationAsync(PreparationLocation location, OrderItemStatus? status = null);
+    Task<PagedResult<OrderItemDto>> GetOrderItemsByLocationAsync(PreparationLocation location, OrderItemStatus? status = null, int page = 1, int pageSize = 100);
 }

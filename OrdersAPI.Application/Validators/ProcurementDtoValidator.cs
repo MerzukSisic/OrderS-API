@@ -11,13 +11,13 @@ public class CreateProcurementDtoValidator : AbstractValidator<CreateProcurement
             .NotEmpty().WithMessage("StoreId je obavezan");
 
         RuleFor(x => x.Supplier)
-            .NotEmpty().WithMessage("Dobavljac je obavezan")
-            .MinimumLength(2).WithMessage("Dobavljac mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Dobavljac ne mo엁 biti du엍 od 100 karaktera");
+            .NotEmpty().WithMessage("Dobavlja훾 je obavezan")
+            .MinimumLength(2).WithMessage("Dobavlja훾 mora imati najmanje 2 karaktera")
+            .MaximumLength(100).WithMessage("Dobavlja훾 ne mo탑e biti du탑i od 100 karaktera");
 
         RuleFor(x => x.Items)
-            .NotEmpty().WithMessage("Narud얺a mora imati najmanje jednu stavku")
-            .Must(x => x.Count > 0).WithMessage("Narud얺a mora imati najmanje jednu stavku");
+            .NotEmpty().WithMessage("Narud탑ba mora imati najmanje jednu stavku")
+            .Must(x => x.Count > 0).WithMessage("Narud탑ba mora imati najmanje jednu stavku");
 
         RuleForEach(x => x.Items).SetValidator(new CreateProcurementItemDtoValidator());
     }
@@ -31,7 +31,7 @@ public class CreateProcurementItemDtoValidator : AbstractValidator<CreateProcure
             .NotEmpty().WithMessage("StoreProductId je obavezan");
 
         RuleFor(x => x.Quantity)
-            .GreaterThan(0).WithMessage("Kolicina mora biti veca od 0")
-            .LessThanOrEqualTo(10000).WithMessage("Kolicina ne mo엁 biti veca od 10000");
+            .GreaterThan(0).WithMessage("Koli훾ina mora biti veca od 0")
+            .LessThanOrEqualTo(10000).WithMessage("Koli훾ina ne mo탑e biti veca od 10000");
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using OrdersAPI.Domain.Constants;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -33,7 +34,7 @@ public class NotificationsController(INotificationService notificationService) :
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<NotificationDto>> CreateNotification([FromBody] CreateNotificationDto dto)
     {
         var notification = await notificationService.CreateNotificationAsync(dto.UserId, dto.Title, dto.Message, dto.Type);

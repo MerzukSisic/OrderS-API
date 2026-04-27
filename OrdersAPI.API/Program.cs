@@ -3,14 +3,18 @@ using System.Text;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Hubs;
 using OrdersAPI.Infrastructure.Services;
-using OrdersAPI.API.Middleware; // ✅ ADD THIS FOR GlobalExceptionHandler
+using OrdersAPI.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
+
+static string RequiredConfig(IConfiguration configuration, string key) =>
+    configuration[key] ?? throw new InvalidOperationException($"{key} not configured");
 
 // ==================== CONTROLLERS ====================
 builder.Services.AddControllers();
@@ -43,7 +47,9 @@ builder.Services.AddSwaggerGen(c =>
 
 // ==================== DATABASE ====================
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sql => sql.EnableRetryOnFailure(maxRetryCount: 10, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null)));
 
 // ==================== JWT AUTHENTICATION ====================
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
@@ -64,19 +70,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             RoleClaimType = ClaimTypes.Role
         };
 
-        // ✅ SignalR support - allow token from query string
         options.Events = new JwtBearerEvents
         {
+            // ✅ SignalR support - allow token from query string
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
-                
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-                {
                     context.Token = accessToken;
-                }
-                
+                return Task.CompletedTask;
+            },
+            // ✅ Blacklist check - reject revoked access tokens
+            OnTokenValidated = context =>
+            {
+                var blacklist = context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenBlacklistService>();
+                var jti = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+                if (jti != null && blacklist.IsRevoked(jti))
+                    context.Fail("Token has been revoked");
                 return Task.CompletedTask;
             }
         };
@@ -88,7 +100,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 
 // ==================== AUTOMAPPER ====================
-builder.Services.AddAutoMapper(typeof(OrdersAPI.Application.Mappings.MappingProfile));
+builder.Services.AddAutoMapper(cfg => cfg.AddProfile<OrdersAPI.Application.Mappings.MappingProfile>());
 
 // ==================== MASSTRANSIT (RabbitMQ) ====================
 builder.Services.AddMassTransit(x =>
@@ -96,10 +108,10 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
-        var rabbitUser = builder.Configuration["RabbitMQ:User"] ?? "guest";
-        var rabbitPassword = builder.Configuration["RabbitMQ:Password"] ?? "guest";
-        var rabbitPort = ushort.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+        var rabbitHost = RequiredConfig(builder.Configuration, "RabbitMQ:Host");
+        var rabbitUser = RequiredConfig(builder.Configuration, "RabbitMQ:User");
+        var rabbitPassword = RequiredConfig(builder.Configuration, "RabbitMQ:Password");
+        var rabbitPort = ushort.Parse(RequiredConfig(builder.Configuration, "RabbitMQ:Port"));
 
         cfg.Host(rabbitHost, rabbitPort, "/", h =>
         {
@@ -109,6 +121,10 @@ builder.Services.AddMassTransit(x =>
 
     });
 });
+
+// ==================== MEMORY CACHE & HTTP CONTEXT ====================
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
 
 // ==================== SERVICES (DEPENDENCY INJECTION) ====================
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -126,6 +142,8 @@ builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IAccompanimentService, AccompanimentService>();
 builder.Services.AddScoped<IStoreService, StoreService>();
 
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
 
@@ -142,9 +160,12 @@ builder.Services.AddProblemDetails();
 // ==================== CORS (OPTIMIZED FOR DESKTOP) ====================
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("ConfiguredOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
+        var allowedOrigins = RequiredConfig(builder.Configuration, "Cors:AllowedOrigins")
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -174,20 +195,22 @@ using (var scope = app.Services.CreateScope())
 // ✅ 1. EXCEPTION HANDLER - MUST BE FIRST!
 app.UseExceptionHandler(options => { });
 
-// 2. Swagger (Development)
-// 2. Swagger (Always enabled)
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// 2. Swagger (Development only)
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderS API v1");
-    c.RoutePrefix = "swagger";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderS API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
 
 // ✅ HTTPS Redirect - Disabled for localhost development
 // app.UseHttpsRedirection(); 
 
 // ✅ CORS - Must be before Authentication
-app.UseCors("AllowAll");
+app.UseCors("ConfiguredOrigins");
 
 // ✅ Routing
 app.UseRouting();

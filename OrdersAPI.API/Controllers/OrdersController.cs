@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
@@ -46,28 +47,47 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpGet("active")]
-    public async Task<ActionResult<IEnumerable<OrderDto>>> GetActiveOrders()
+    public async Task<ActionResult<IEnumerable<OrderDto>>> GetActiveOrders(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var orders = await orderService.GetActiveOrdersAsync();
-        return Ok(orders);
+        var result = await orderService.GetActiveOrdersAsync(page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("table/{tableId}")]
-    public async Task<ActionResult<List<OrderDto>>> GetOrdersByTable(Guid tableId)
+    public async Task<ActionResult<IEnumerable<OrderDto>>> GetOrdersByTable(
+        Guid tableId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var orders = await orderService.GetOrdersByTableAsync(tableId);
-        return Ok(orders);
+        var result = await orderService.GetOrdersByTableAsync(tableId, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("items/by-location")]
-    [Authorize(Roles = "Admin,Bartender,Kitchen")]
-    public async Task<ActionResult<List<OrderItemDto>>> GetOrderItemsByLocation(
+    [Authorize(Roles = Roles.KitchenOrBar)]
+    public async Task<ActionResult<IEnumerable<OrderItemDto>>> GetOrderItemsByLocation(
         [FromQuery] string location,
-        [FromQuery] OrderItemStatus? status = null)
+        [FromQuery] OrderItemStatus? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100)
     {
         var preparationLocation = Enum.Parse<PreparationLocation>(location);
-        var items = await orderService.GetOrderItemsByLocationAsync(preparationLocation, status);
-        return Ok(items);
+        var result = await orderService.GetOrderItemsByLocationAsync(preparationLocation, status, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpPut("{id}/status")]
@@ -100,7 +120,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPut("items/{itemId}/status")]
-    [Authorize(Roles = "Waiter,Bartender,Kitchen,Admin")]  
+    [Authorize(Roles = Roles.AllStaff)]
     public async Task<IActionResult> UpdateOrderItemStatus(Guid itemId, [FromBody] UpdateOrderItemStatusDto dto)
     {
         var status = Enum.Parse<OrderItemStatus>(dto.Status);

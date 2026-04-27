@@ -1,7 +1,7 @@
 # OrderS — Backend API
 **Autor:** Merzuk Šišić (IB220060)  
 **Predmet:** Razvoj softvera II  
-**Akademska godina:** 2024/2025
+**Akademska godina:** 2025/2026
 
 ---
 
@@ -36,8 +36,8 @@ OrderS je kompletan informacioni sistem za upravljanje narudžbama u kafiću. Ov
 - ✅ OrdersController zaštićen s `[Authorize]` atributom
 
 ### Povezani repozitoriji:
-- 📱 **Mobile aplikacija:** [orders_mobile repo]
-- 🖥️ **Desktop aplikacija:** [rs2-desktop repo]
+- **Mobile aplikacija:** orders_mobile repo
+- **Desktop aplikacija:** rs2-desktop repo
 
 ---
 
@@ -91,10 +91,12 @@ cd OrdersAPI
 ```
 
 #### 2. Konfiguracija
-Zipovani `.env.zip` fajl se nalazi u root folderu. Ekstraktovati s šifrom `fit`:
+Zipovani `fit_env.zip` fajl se nalazi u root folderu. Ekstraktovati s šifrom `fit`:
 ```bash
-7z x .env.zip
+7z x fit_env.zip
 ```
+
+`.env` treba sadržavati vrijednosti za `SA_PASSWORD`, `JWT_KEY`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `CORS_ALLOWED_ORIGINS` i `APP_PUBLIC_BASE_URL`.
 
 #### 3. Pokretanje
 ```bash
@@ -102,7 +104,7 @@ docker-compose up --build
 ```
 
 Pokretanjem se automatski:
-- Kreira SQL Server baza `OrdersDB`
+- Kreira SQL Server baza `220060`
 - Seeduju testni podaci (korisnici, proizvodi, stolovi)
 - Pokreće RabbitMQ s management UI-om
 - Pokreće API i Worker servis
@@ -145,7 +147,7 @@ GET /api/Recommendations/popular    # Top 10 najpopularnijih (javni)
 GET /api/Recommendations/time-based # Preporuke po vremenu (javni)
 ```
 
-Detaljna dokumentacija algoritma: `recommender-dokumentacija.pdf` (root folder).
+Detaljna dokumentacija algoritma: `recommender-dokumentacija.md` (root folder).
 
 ---
 
@@ -181,8 +183,8 @@ OrdersAPI/
 │   ├── Consumers/
 │   └── Events/
 ├── docker-compose.yml
-├── recommender-dokumentacija.pdf
-└── .env.zip                        # Konfiguracijski fajl (šifra: fit)
+├── recommender-dokumentacija.md
+└── fit_env.zip                     # Konfiguracijski fajl (šifra: fit)
 ```
 
 ---
@@ -202,4 +204,4 @@ Username: guest / Password: guest
 
 ---
 
-*OrderS — RS2 2024/2025 — Merzuk Šišić — IB220060*
+*OrderS — RS2 2025/2026 — Merzuk Šišić — IB220060*

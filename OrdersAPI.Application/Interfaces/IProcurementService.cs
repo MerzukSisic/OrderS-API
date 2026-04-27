@@ -1,5 +1,4 @@
 ﻿using OrdersAPI.Application.DTOs;
-using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.Application.Interfaces;
@@ -13,4 +12,9 @@ public interface IProcurementService
     Task ConfirmPaymentAsync(Guid procurementOrderId, string paymentIntentId);
     Task UpdateProcurementStatusAsync(Guid procurementOrderId, ProcurementStatus status);
     Task ReceiveProcurementAsync(Guid procurementOrderId, ReceiveProcurementDto dto);
+    Task<string> CreateCheckoutSessionAsync(Guid procurementOrderId);
+    Task<string> HandleCheckoutSuccessAsync(Guid procurementOrderId, string sessionId);
+    Task HandleWebhookCheckoutCompletedAsync(WebhookEventDto eventDto);
+    Task HandleWebhookPaymentSucceededAsync(WebhookEventDto eventDto);
+    Task HandleWebhookChargeRefundedAsync(WebhookEventDto eventDto);
 }

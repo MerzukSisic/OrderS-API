@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 
 namespace OrdersAPI.API.Controllers;
 
@@ -25,7 +26,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpPost("store-products")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<StoreProductDto>> CreateStoreProduct([FromBody] CreateStoreProductDto dto)
     {
         var product = await inventoryService.CreateStoreProductAsync(dto);
@@ -33,7 +34,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpPut("store-products/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateStoreProduct(Guid id, [FromBody] UpdateStoreProductDto dto)
     {
         await inventoryService.UpdateStoreProductAsync(id, dto);
@@ -41,7 +42,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpDelete("store-products/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteStoreProduct(Guid id)
     {
         await inventoryService.DeleteStoreProductAsync(id);
@@ -49,7 +50,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpPost("store-products/{id}/adjust")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> AdjustInventory(Guid id, [FromBody] AdjustInventoryDto dto)
     {
         await inventoryService.AdjustInventoryAsync(id, dto);
@@ -57,7 +58,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpGet("low-stock")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<IEnumerable<StoreProductDto>>> GetLowStockProducts()
     {
         var products = await inventoryService.GetLowStockProductsAsync();
@@ -65,7 +66,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpGet("logs")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<IEnumerable<InventoryLogDto>>> GetInventoryLogs(
         [FromQuery] Guid? storeProductId = null,
         [FromQuery] int days = 30)
@@ -75,7 +76,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpGet("total-value")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<object>> GetTotalStockValue([FromQuery] Guid? storeId = null)
     {
         var totalValue = await inventoryService.GetTotalStockValueAsync(storeId);
@@ -83,7 +84,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpGet("consumption-forecast")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<List<ConsumptionForecastDto>>> GetConsumptionForecast([FromQuery] int days = 30)
     {
         var forecast = await inventoryService.GetConsumptionForecastAsync(days);

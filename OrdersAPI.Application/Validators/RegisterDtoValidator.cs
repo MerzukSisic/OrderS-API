@@ -10,7 +10,7 @@ public class RegisterDtoValidator : AbstractValidator<RegisterDto>
         RuleFor(x => x.FullName)
             .NotEmpty().WithMessage("Puno ime je obavezno")
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Ime ne mo�e biti du�e od 100 karaktera");
+            .MaximumLength(100).WithMessage("Ime ne može biti duže od 100 karaktera");
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email je obavezan")

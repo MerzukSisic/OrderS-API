@@ -1,5 +1,6 @@
 using OrdersAPI.Domain.Exceptions;
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -8,12 +9,20 @@ using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class CategoryService(ApplicationDbContext context, ILogger<CategoryService> logger)
+public class CategoryService(ApplicationDbContext context, ILogger<CategoryService> logger, IMemoryCache cache)
     : ICategoryService
 {
+    private static string CacheKey(int page, int size) => $"categories:{page}:{size}";
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
     public async Task<PagedResult<CategoryDto>> GetAllCategoriesAsync(int page = 1, int pageSize = 100)
     {
         var clampedPageSize = Math.Min(pageSize, 100);
+        var key = CacheKey(page, clampedPageSize);
+
+        if (cache.TryGetValue(key, out PagedResult<CategoryDto>? cached) && cached != null)
+            return cached;
+
         var query = context.Categories.AsNoTracking().OrderBy(c => c.Name);
         var totalCount = await query.CountAsync();
         var categories = await query
@@ -29,7 +38,9 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
                 CreatedAt = c.CreatedAt
             })
             .ToListAsync();
-        return new PagedResult<CategoryDto> { Items = categories, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
+        var result = new PagedResult<CategoryDto> { Items = categories, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
+        cache.Set(key, result, CacheTtl);
+        return result;
     }
 
     public async Task<CategoryDto> GetCategoryByIdAsync(Guid id)
@@ -101,6 +112,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
 
         context.Categories.Add(category);
         await context.SaveChangesAsync();
+        cache.Remove(CacheKey(1, 100));
 
         logger.LogInformation("Category {CategoryId} created: {CategoryName}", category.Id, category.Name);
 
@@ -126,7 +138,8 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
         if (dto.IconName != null) category.IconName = dto.IconName;
 
         await context.SaveChangesAsync();
-        
+        cache.Remove(CacheKey(1, 100));
+
         logger.LogInformation("Category {CategoryId} updated", id);
     }
 
@@ -144,6 +157,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
 
         context.Categories.Remove(category);
         await context.SaveChangesAsync();
+        cache.Remove(CacheKey(1, 100));
 
         logger.LogInformation("Category {CategoryId} deleted", id);
     }

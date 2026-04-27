@@ -11,9 +11,9 @@ public interface IProductService
     Task<ProductDto> CreateProductAsync(CreateProductDto dto);
     Task UpdateProductAsync(Guid id, UpdateProductDto dto);
     Task DeleteProductAsync(Guid id);
-    Task<IEnumerable<ProductDto>> SearchProductsAsync(string searchTerm);
-    
+    Task<PagedResult<ProductDto>> SearchProductsAsync(string searchTerm, int page = 1, int pageSize = 50);
+
     Task<bool> ToggleAvailabilityAsync(Guid productId);
-    Task<List<ProductDto>> GetProductsByLocationAsync(PreparationLocation location, bool? isAvailable = null);
+    Task<PagedResult<ProductDto>> GetProductsByLocationAsync(PreparationLocation location, bool? isAvailable = null, int page = 1, int pageSize = 50);
     Task BulkUpdateAvailabilityAsync(List<Guid> productIds, bool isAvailable);
 }

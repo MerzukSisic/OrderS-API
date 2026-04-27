@@ -36,8 +36,6 @@ public class ProcurementControllerTests
 
         _controller = new ProcurementController(
             _procurementServiceMock.Object,
-            stripeMock.Object,
-            dbContext,
             logger);
 
         _testStoreId = Guid.NewGuid();
@@ -335,10 +333,10 @@ public class ProcurementControllerTests
             .Setup(x => x.CreatePaymentIntentAsync(It.IsAny<Guid>()))
             .ThrowsAsync(new KeyNotFoundException("Procurement order not found"));
 
-        var result = await _controller.CreatePaymentIntent(_testProcurementOrderId);
+        var act = () => _controller.CreatePaymentIntent(_testProcurementOrderId);
 
-        result.Result.Should().BeOfType<ObjectResult>()
-            .Which.StatusCode.Should().Be(500);
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Procurement order not found");
 
         _procurementServiceMock.Verify(x => x.CreatePaymentIntentAsync(_testProcurementOrderId), Times.Once);
     }
@@ -382,10 +380,10 @@ public class ProcurementControllerTests
             .Setup(x => x.ConfirmPaymentAsync(_testProcurementOrderId, confirmDto.PaymentIntentId))
             .ThrowsAsync(new InvalidOperationException("Payment intent not found or already processed"));
 
-        var result = await _controller.ConfirmPayment(_testProcurementOrderId, confirmDto);
+        var act = () => _controller.ConfirmPayment(_testProcurementOrderId, confirmDto);
 
-        result.Should().BeOfType<ObjectResult>()
-            .Which.StatusCode.Should().Be(500);
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Payment intent not found or already processed");
 
         _procurementServiceMock.Verify(x => x.ConfirmPaymentAsync(_testProcurementOrderId, confirmDto.PaymentIntentId), Times.Once);
     }

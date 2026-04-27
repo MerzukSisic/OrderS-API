@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 
 namespace OrdersAPI.API.Controllers;
 
@@ -18,7 +19,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpPost("groups")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<ActionResult<AccompanimentGroupDto>> CreateGroup(CreateAccompanimentGroupDto dto)
     {
         var group = await accompanimentService.CreateGroupAsync(dto);
@@ -36,7 +37,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpPut("groups/{id}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> UpdateGroup(Guid id, UpdateAccompanimentGroupDto dto)
     {
         await accompanimentService.UpdateGroupAsync(id, dto);
@@ -44,7 +45,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpDelete("groups/{id}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> DeleteGroup(Guid id)
     {
         await accompanimentService.DeleteGroupAsync(id);
@@ -52,7 +53,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpPost("groups/{groupId}/accompaniments")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<ActionResult<AccompanimentDto>> AddAccompaniment(Guid groupId, CreateAccompanimentDto dto)
     {
         var accompaniment = await accompanimentService.AddAccompanimentAsync(groupId, dto);
@@ -70,7 +71,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> UpdateAccompaniment(Guid id, UpdateAccompanimentDto dto)
     {
         await accompanimentService.UpdateAccompanimentAsync(id, dto);
@@ -78,7 +79,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> DeleteAccompaniment(Guid id)
     {
         await accompanimentService.DeleteAccompanimentAsync(id);
@@ -86,7 +87,7 @@ public class AccompanimentsController(IAccompanimentService accompanimentService
     }
 
     [HttpPatch("{id}/toggle-availability")]
-    [Authorize(Roles = "Admin,Manager,Waiter")]
+    [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<ActionResult<object>> ToggleAvailability(Guid id)
     {
         var newStatus = await accompanimentService.ToggleAvailabilityAsync(id);

@@ -1,20 +1,17 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 using OrdersAPI.Domain.Enums;
-using OrdersAPI.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 public class ProcurementController(
     IProcurementService procurementService,
-    IStripeService stripeService,
-    ApplicationDbContext context,
     ILogger<ProcurementController> logger)
     : ControllerBase
 {
@@ -60,44 +57,24 @@ public class ProcurementController(
     }
 
     // ==================== MOBILE: PAYMENT INTENT (IN-APP) ====================
-    
+
     [HttpPost("{id}/payment-intent")]
     public async Task<ActionResult<PaymentIntentDto>> CreatePaymentIntent(Guid id)
     {
-        try
-        {
-            // DEBUG: log mode secret key-a (TEST vs LIVE)
-            logger.LogWarning("🔑 Stripe SecretKey mode: {Mode}",
-                Stripe.StripeConfiguration.ApiKey?.StartsWith("sk_test_") == true ? "TEST" : "LIVE/INVALID");
+        var paymentIntent = await procurementService.CreatePaymentIntentAsync(id);
 
-            var paymentIntent = await procurementService.CreatePaymentIntentAsync(id);
-
-            return Ok(new PaymentIntentDto
-            {
-                ClientSecret = paymentIntent.ClientSecret,
-                PaymentIntentId = paymentIntent.PaymentIntentId
-            });
-        }
-        catch (Exception ex)
+        return Ok(new PaymentIntentDto
         {
-            logger.LogError(ex, "Error creating payment intent for order {OrderId}", id);
-            return StatusCode(500, new { error = ex.Message });
-        }
+            ClientSecret = paymentIntent.ClientSecret,
+            PaymentIntentId = paymentIntent.PaymentIntentId
+        });
     }
 
     [HttpPost("{id}/confirm-payment")]
     public async Task<IActionResult> ConfirmPayment(Guid id, [FromBody] ConfirmPaymentDto dto)
     {
-        try
-        {
-            await procurementService.ConfirmPaymentAsync(id, dto.PaymentIntentId);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error confirming payment for order {OrderId}", id);
-            return StatusCode(500, new { error = ex.Message });
-        }
+        await procurementService.ConfirmPaymentAsync(id, dto.PaymentIntentId);
+        return NoContent();
     }
 
     // ==================== DESKTOP: CHECKOUT SESSION (BROWSER) ====================
@@ -105,79 +82,24 @@ public class ProcurementController(
     [HttpPost("{id}/create-checkout-session")]
     public async Task<IActionResult> CreateCheckoutSession(Guid id)
     {
-        try
-        {
-            var order = await context.ProcurementOrders.FindAsync(id);
-            if (order == null)
-                return NotFound(new { error = "Order not found" });
-
-            if (order.Status != ProcurementStatus.Pending)
-                return BadRequest(new { error = "Order is not in pending status" });
-
-            var checkoutUrl = await stripeService.CreateCheckoutSessionAsync(
-                id.ToString(),
-                order.TotalAmount,
-                "bam"
-            );
-
-            logger.LogInformation("✅ Checkout session created for order {OrderId}", id);
-
-            return Ok(new { checkoutUrl });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error creating checkout session for order {OrderId}", id);
-            return StatusCode(500, new { error = ex.Message });
-        }
+        var checkoutUrl = await procurementService.CreateCheckoutSessionAsync(id);
+        logger.LogInformation("Checkout session created for order {OrderId}", id);
+        return Ok(new { checkoutUrl });
     }
 
     [HttpGet("{id}/payment-success")]
     [AllowAnonymous]
     public async Task<IActionResult> PaymentSuccess(Guid id, [FromQuery] string session_id)
     {
-        try
-        {
-            var order = await context.ProcurementOrders.FindAsync(id);
-            if (order == null)
-            {
-                logger.LogWarning("⚠️ Order {OrderId} not found for session {SessionId}", id, session_id);
-                return NotFound();
-            }
-
-            var session = await stripeService.GetCheckoutSessionAsync(session_id);
-
-            if (session.PaymentStatus == "paid")
-            {
-                if (order.Status == ProcurementStatus.Pending)
-                {
-                    order.Status = ProcurementStatus.Paid;
-                    order.StripePaymentIntentId = session.PaymentIntentId;
-                    await context.SaveChangesAsync();
-
-                    logger.LogInformation("✅ Payment successful for order {OrderId}, PI: {PaymentIntentId}",
-                        id, session.PaymentIntentId);
-                }
-
-                return Content(GetSuccessHtml(), "text/html");
-            }
-
-            logger.LogWarning("⚠️ Payment not completed for order {OrderId}, status: {PaymentStatus}",
-                id, session.PaymentStatus);
-            
-            return BadRequest(new { error = "Payment not completed" });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error processing payment success for order {OrderId}", id);
-            return StatusCode(500, new { error = ex.Message });
-        }
+        await procurementService.HandleCheckoutSuccessAsync(id, session_id);
+        return Content(GetSuccessHtml(), "text/html");
     }
 
     [HttpGet("{id}/payment-cancel")]
     [AllowAnonymous]
     public IActionResult PaymentCancel(Guid id)
     {
-        logger.LogWarning("⚠️ Payment cancelled for order {OrderId}", id);
+        logger.LogWarning("Payment cancelled for order {OrderId}", id);
         return Content(GetCancelHtml(), "text/html");
     }
 

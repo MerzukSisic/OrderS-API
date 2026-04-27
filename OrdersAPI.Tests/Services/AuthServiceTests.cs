@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -43,7 +44,9 @@ public class AuthServiceTests : IDisposable
             .Returns(Task.CompletedTask);
 
         var logger = Mock.Of<ILogger<AuthService>>();
-        _service = new AuthService(_db, config, logger, _emailMock.Object);
+        var blacklist = Mock.Of<ITokenBlacklistService>();
+        var httpContextAccessor = Mock.Of<IHttpContextAccessor>();
+        _service = new AuthService(_db, config, logger, _emailMock.Object, blacklist, httpContextAccessor);
     }
 
     public void Dispose() => _db.Dispose();

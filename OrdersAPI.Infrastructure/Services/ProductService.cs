@@ -298,19 +298,25 @@ public class ProductService(
         logger.LogInformation("Product {ProductId} deleted", id);
     }
 
-    public async Task<IEnumerable<ProductDto>> SearchProductsAsync(string searchTerm)
+    public async Task<PagedResult<ProductDto>> SearchProductsAsync(string searchTerm, int page = 1, int pageSize = 50)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
-            return (await GetAllProductsAsync()).Items;
+            return await GetAllProductsAsync(null, null, page, pageSize);
 
-        var products = await context.Products
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Products
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
-            .Where(p => EF.Functions.Like(p.Name, $"%{searchTerm}%") || 
+            .Where(p => EF.Functions.Like(p.Name, $"%{searchTerm}%") ||
                        (p.Description != null && EF.Functions.Like(p.Description, $"%{searchTerm}%")))
-            .OrderBy(p => p.Name)
+            .OrderBy(p => p.Name);
+
+        var totalCount = await query.CountAsync();
+        var products = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(p => new ProductDto
             {
                 Id = p.Id,
@@ -338,7 +344,7 @@ public class ProductService(
             })
             .ToListAsync();
 
-        return products;
+        return new PagedResult<ProductDto> { Items = products, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task<bool> ToggleAvailabilityAsync(Guid productId)
@@ -358,8 +364,9 @@ public class ProductService(
         return product.IsAvailable;
     }
 
-    public async Task<List<ProductDto>> GetProductsByLocationAsync(PreparationLocation location, bool? isAvailable = null)
+    public async Task<PagedResult<ProductDto>> GetProductsByLocationAsync(PreparationLocation location, bool? isAvailable = null, int page = 1, int pageSize = 50)
     {
+        var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Products
             .AsNoTracking()
             .Include(p => p.Category)
@@ -371,8 +378,11 @@ public class ProductService(
         if (isAvailable.HasValue)
             query = query.Where(p => p.IsAvailable == isAvailable.Value);
 
+        var totalCount = await query.CountAsync();
         var products = await query
             .OrderBy(p => p.Name)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .Select(p => new ProductDto
             {
                 Id = p.Id,
@@ -400,7 +410,7 @@ public class ProductService(
             })
             .ToListAsync();
 
-        return products;
+        return new PagedResult<ProductDto> { Items = products, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task BulkUpdateAvailabilityAsync(List<Guid> productIds, bool isAvailable)

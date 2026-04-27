@@ -10,7 +10,7 @@ public class CreateUserDtoValidator : AbstractValidator<CreateUserDto>
         RuleFor(x => x.FullName)
             .NotEmpty().WithMessage("Puno ime je obavezno")
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Ime ne mo엁 biti du엁 od 100 karaktera");
+            .MaximumLength(100).WithMessage("Ime ne mo탑e biti du탑e od 100 karaktera");
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email je obavezan")
@@ -33,7 +33,7 @@ public class UpdateUserDtoValidator : AbstractValidator<UpdateUserDto>
     {
         RuleFor(x => x.FullName)
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Ime ne mo엁 biti du엁 od 100 karaktera")
+            .MaximumLength(100).WithMessage("Ime ne mo탑e biti du탑e od 100 karaktera")
             .When(x => x.FullName != null);
     }
 }

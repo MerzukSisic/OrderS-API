@@ -1,5 +1,6 @@
 using OrdersAPI.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Entities;
@@ -7,11 +8,19 @@ using OrdersAPI.Infrastructure.Data;
 
 namespace OrdersAPI.Infrastructure.Services;
 
-public class StoreService(ApplicationDbContext context) : IStoreService
+public class StoreService(ApplicationDbContext context, IMemoryCache cache) : IStoreService
 {
+    private static string CacheKey(int page, int size) => $"stores:{page}:{size}";
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
     public async Task<PagedResult<StoreDto>> GetAllStoresAsync(int page = 1, int pageSize = 100)
     {
         var clampedPageSize = Math.Min(pageSize, 100);
+        var key = CacheKey(page, clampedPageSize);
+
+        if (cache.TryGetValue(key, out PagedResult<StoreDto>? cached) && cached != null)
+            return cached;
+
         var query = context.Stores.Include(s => s.StoreProducts).AsNoTracking();
         var totalCount = await query.CountAsync();
         var stores = await query
@@ -30,7 +39,9 @@ public class StoreService(ApplicationDbContext context) : IStoreService
                 LowStockProductsCount = s.StoreProducts.Count(p => p.CurrentStock < p.MinimumStock)
             })
             .ToListAsync();
-        return new PagedResult<StoreDto> { Items = stores, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
+        var result = new PagedResult<StoreDto> { Items = stores, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
+        cache.Set(key, result, CacheTtl);
+        return result;
     }
 
     public async Task<StoreDto> GetStoreByIdAsync(Guid id)
@@ -68,6 +79,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
 
         context.Stores.Add(store);
         await context.SaveChangesAsync();
+        cache.Remove(CacheKey(1, 100));
 
         return await GetStoreByIdAsync(store.Id);
     }
@@ -91,6 +103,7 @@ public class StoreService(ApplicationDbContext context) : IStoreService
             store.IsExternal = dto.IsExternal.Value;
 
         await context.SaveChangesAsync();
+        cache.Remove(CacheKey(1, 100));
     }
 
     public async Task DeleteStoreAsync(Guid id)
@@ -102,11 +115,11 @@ public class StoreService(ApplicationDbContext context) : IStoreService
         if (store == null)
             throw new NotFoundException($"Store with ID {id} not found");
 
-        // Provjeri da li ima proizvoda
         if (store.StoreProducts.Any())
             throw new BusinessException("Cannot delete store with products. Remove products first.");
 
         context.Stores.Remove(store);
         await context.SaveChangesAsync();
+        cache.Remove(CacheKey(1, 100));
     }
 }

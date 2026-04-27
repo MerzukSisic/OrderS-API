@@ -65,6 +65,15 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(user);
     }
 
+    [HttpPut("me")]
+    [Authorize]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await authService.UpdateProfileAsync(userId, dto);
+        return NoContent();
+    }
+
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {

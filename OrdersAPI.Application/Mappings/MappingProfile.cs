@@ -129,13 +129,5 @@ public class MappingProfile : Profile
             .ForMember(d => d.AccompanimentId, o => o.MapFrom(s => s.AccompanimentId))
             .ForMember(d => d.Name, o => o.MapFrom(s => s.Accompaniment.Name))
             .ForMember(d => d.ExtraCharge, o => o.MapFrom(s => s.PriceAtOrder));
-        
-     CreateMap<AccompanimentGroup, AccompanimentGroupDto>()
-            .ForMember(dest => dest.SelectionType, 
-                opt => opt.MapFrom(src => src.SelectionType.ToString()));
-
-        CreateMap<Accompaniment, AccompanimentDto>();
-        
-        CreateMap<Accompaniment, SelectedAccompanimentDto>();
     }
 }

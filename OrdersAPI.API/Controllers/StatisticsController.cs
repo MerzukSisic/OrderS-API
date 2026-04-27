@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 
 namespace OrdersAPI.API.Controllers;
 
@@ -11,7 +12,7 @@ namespace OrdersAPI.API.Controllers;
 public class StatisticsController(IStatisticsService statisticsService) : ControllerBase
 {
     [HttpGet("dashboard")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<DashboardDto>> GetDashboard()
     {
         var dashboard = await statisticsService.GetDashboardStatsAsync();
@@ -19,7 +20,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("daily")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<DailyStatisticsDto>> GetDailyStats([FromQuery] DateTime? date = null)
     {
         var stats = await statisticsService.GetDailyStatsAsync(date ?? DateTime.UtcNow.Date);
@@ -27,7 +28,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("waiter-performance")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<IEnumerable<WaiterPerformanceDto>>> GetWaiterPerformance([FromQuery] int days = 30)
     {
         var performance = await statisticsService.GetWaiterPerformanceAsync(days);
@@ -35,7 +36,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("revenue-chart")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<RevenueChartDto>> GetRevenueChart(
         [FromQuery] DateTime fromDate,
         [FromQuery] DateTime toDate)
@@ -45,7 +46,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("top-selling-products")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<List<ProductSalesDto>>> GetTopSellingProducts(
         [FromQuery] int count = 10,
         [FromQuery] int days = 30)
@@ -55,7 +56,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("peak-hours")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<List<PeakHourDto>>> GetPeakHours([FromQuery] int days = 7)
     {
         var peakHours = await statisticsService.GetPeakHoursAsync(days);
@@ -63,7 +64,7 @@ public class StatisticsController(IStatisticsService statisticsService) : Contro
     }
 
     [HttpGet("category-sales")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<List<CategorySalesDto>>> GetCategorySales(
         [FromQuery] DateTime fromDate,
         [FromQuery] DateTime toDate)

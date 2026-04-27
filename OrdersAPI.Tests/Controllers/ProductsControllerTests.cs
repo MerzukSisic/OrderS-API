@@ -233,8 +233,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.SearchProductsAsync(searchTerm))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.SearchProductsAsync(searchTerm, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.SearchProducts(searchTerm);
@@ -247,7 +247,7 @@ public class ProductsControllerTests
         products.Should().NotBeNull();
         products.Should().HaveCount(2);
 
-        _productServiceMock.Verify(x => x.SearchProductsAsync(searchTerm), Times.Once);
+        _productServiceMock.Verify(x => x.SearchProductsAsync(searchTerm, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -257,8 +257,8 @@ public class ProductsControllerTests
         var searchTerm = "nonexistent";
 
         _productServiceMock
-            .Setup(x => x.SearchProductsAsync(searchTerm))
-            .ReturnsAsync(new List<ProductDto>());
+            .Setup(x => x.SearchProductsAsync(searchTerm, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = new List<ProductDto>(), TotalCount = 0, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.SearchProducts(searchTerm);
@@ -271,7 +271,7 @@ public class ProductsControllerTests
         products.Should().NotBeNull();
         products.Should().BeEmpty();
 
-        _productServiceMock.Verify(x => x.SearchProductsAsync(searchTerm), Times.Once);
+        _productServiceMock.Verify(x => x.SearchProductsAsync(searchTerm, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion
@@ -294,8 +294,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, null))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProductsByLocation("Kitchen", null);
@@ -303,13 +303,13 @@ public class ProductsControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var products = okResult!.Value as List<ProductDto>;
+        var products = okResult!.Value as IEnumerable<ProductDto>;
 
         products.Should().NotBeNull();
         products.Should().HaveCount(1);
-        products![0].PreparationLocation.Should().Be("Kitchen");
+        products!.First().PreparationLocation.Should().Be("Kitchen");
 
-        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, null), Times.Once);
+        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -328,8 +328,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Bar, null))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Bar, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProductsByLocation("Bar", null);
@@ -337,12 +337,12 @@ public class ProductsControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var products = okResult!.Value as List<ProductDto>;
+        var products = okResult!.Value as IEnumerable<ProductDto>;
 
         products.Should().NotBeNull();
-        products![0].PreparationLocation.Should().Be("Bar");
+        products!.First().PreparationLocation.Should().Be("Bar");
 
-        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Bar, null), Times.Once);
+        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Bar, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -361,8 +361,8 @@ public class ProductsControllerTests
         };
 
         _productServiceMock
-            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, true))
-            .ReturnsAsync(expectedProducts);
+            .Setup(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, true, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<ProductDto> { Items = expectedProducts, TotalCount = expectedProducts.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetProductsByLocation("Kitchen", true);
@@ -370,12 +370,12 @@ public class ProductsControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var products = okResult!.Value as List<ProductDto>;
+        var products = okResult!.Value as IEnumerable<ProductDto>;
 
         products.Should().NotBeNull();
         products!.All(p => p.IsAvailable).Should().BeTrue();
 
-        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, true), Times.Once);
+        _productServiceMock.Verify(x => x.GetProductsByLocationAsync(PreparationLocation.Kitchen, true, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

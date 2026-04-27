@@ -18,6 +18,7 @@ namespace OrdersAPI.Tests.Controllers;
 public class PaymentsControllerTests
 {
     private readonly Mock<IStripeService> _stripeServiceMock;
+    private readonly Mock<IProcurementService> _procurementServiceMock;
     private readonly ApplicationDbContext _dbContext;
     private readonly PaymentsController _controller;
     private readonly Guid _testOrderId;
@@ -27,6 +28,7 @@ public class PaymentsControllerTests
     public PaymentsControllerTests()
     {
         _stripeServiceMock = new Mock<IStripeService>();
+        _procurementServiceMock = new Mock<IProcurementService>();
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -34,7 +36,7 @@ public class PaymentsControllerTests
         _dbContext = new ApplicationDbContext(options);
 
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        _controller = new PaymentsController(_stripeServiceMock.Object, _dbContext, logger);
+        _controller = new PaymentsController(_stripeServiceMock.Object, _procurementServiceMock.Object, logger);
 
         _testOrderId = Guid.NewGuid();
         _testPaymentIntentId = "pi_3AbC123TestPaymentIntent";
@@ -392,8 +394,9 @@ public class PaymentsControllerTests
         await db.SaveChangesAsync();
 
         var stripeMock = new Mock<IStripeService>();
+        var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, db, logger);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
 
         var paymentIntentId = "pi_test_regression_456";
         var webhookJson = "{\"type\":\"payment_intent.succeeded\"}";
@@ -422,13 +425,10 @@ public class PaymentsControllerTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
 
-        var targetOrder = await db.ProcurementOrders.FindAsync(targetOrderId);
-        var otherOrder = await db.ProcurementOrders.FindAsync(otherOrderId);
-
-        targetOrder!.Status.Should().Be(ProcurementStatus.Paid,
-            "the order whose ID was in the webhook metadata must be marked Paid");
-        otherOrder!.Status.Should().Be(ProcurementStatus.Pending,
-            "the unrelated pending order must NOT be touched");
+        procurementServiceMock.Verify(
+            x => x.HandleWebhookPaymentSucceededAsync(It.Is<WebhookEventDto>(e =>
+                e.ProcurementOrderId == targetOrderId.ToString())),
+            Times.Once);
     }
 
     /// <summary>
@@ -453,8 +453,9 @@ public class PaymentsControllerTests
         await db.SaveChangesAsync();
 
         var stripeMock = new Mock<IStripeService>();
+        var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, db, logger);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
 
         var webhookJson = "{\"type\":\"payment_intent.succeeded\"}";
         var signature = "t=123,v1=sig";
@@ -488,8 +489,10 @@ public class PaymentsControllerTests
         var result = await controller.HandleWebhook();
 
         result.Should().BeOfType<OkObjectResult>("second event must still return 200");
-        var order = await db.ProcurementOrders.FindAsync(orderId);
-        order!.Status.Should().Be(ProcurementStatus.Paid, "status stays Paid, not corrupted");
+        procurementServiceMock.Verify(
+            x => x.HandleWebhookPaymentSucceededAsync(It.Is<WebhookEventDto>(e =>
+                e.ProcurementOrderId == orderId.ToString())),
+            Times.Exactly(2));
     }
 
     /// <summary>
@@ -516,8 +519,9 @@ public class PaymentsControllerTests
         await db.SaveChangesAsync();
 
         var stripeMock = new Mock<IStripeService>();
+        var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, db, logger);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
 
         var webhookJson = "{\"type\":\"checkout.session.completed\"}";
         var signature = "t=123,v1=sig";
@@ -542,9 +546,10 @@ public class PaymentsControllerTests
         var result = await controller.HandleWebhook();
 
         result.Should().BeOfType<OkObjectResult>("webhook must still return 200");
-        var order = await db.ProcurementOrders.FindAsync(orderId);
-        order!.Status.Should().Be(ProcurementStatus.Ordered,
-            "order already past Pending must NOT be overwritten to Paid");
+        procurementServiceMock.Verify(
+            x => x.HandleWebhookCheckoutCompletedAsync(It.Is<WebhookEventDto>(e =>
+                e.ProcurementOrderId == orderId.ToString())),
+            Times.Once);
     }
 
     #endregion

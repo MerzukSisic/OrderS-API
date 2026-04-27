@@ -23,8 +23,12 @@ public class OrderService(
 {
     public async Task<OrderDto> CreateOrderAsync(Guid waiterId, CreateOrderDto dto)
     {
+        var strategy = context.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
         using var transaction = await context.Database.BeginTransactionAsync();
-        
+
         try
         {
             // Validate waiter exists
@@ -57,18 +61,25 @@ public class OrderService(
             };
 
             decimal totalAmount = 0;
-            
-            // ✅ Lista za SignalR notifikacije
+
+            // Batch-load all products and admins before the loop to avoid N+1 queries
+            var productIds = dto.Items.Select(i => i.ProductId).Distinct().ToList();
+            var products = await context.Products
+                .Include(p => p.ProductIngredients)
+                    .ThenInclude(pi => pi.StoreProduct)
+                .Where(p => productIds.Contains(p.Id))
+                .ToListAsync();
+            var productLookup = products.ToDictionary(p => p.Id);
+
+            var adminUsers = await context.Users
+                .Where(u => u.Role == UserRole.Admin && u.IsActive)
+                .ToListAsync();
+
             var signalRNotifications = new List<(Guid orderItemId, string productName, PreparationLocation location, int quantity, string notes, DateTime createdAt)>();
 
             foreach (var itemDto in dto.Items)
             {
-                var product = await context.Products
-                    .Include(p => p.ProductIngredients)
-                        .ThenInclude(pi => pi.StoreProduct)
-                    .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
-
-                if (product == null || !product.IsAvailable)
+                if (!productLookup.TryGetValue(itemDto.ProductId, out var product) || !product.IsAvailable)
                     throw new BusinessException($"Product {itemDto.ProductId} is not available");
 
                 if (product.Stock < itemDto.Quantity)
@@ -163,11 +174,7 @@ public class OrderService(
                     // Low stock notification
                     if (ingredient.StoreProduct.CurrentStock < ingredient.StoreProduct.MinimumStock)
                     {
-                        var admins = await context.Users
-                            .Where(u => u.Role == UserRole.Admin && u.IsActive)
-                            .ToListAsync();
-
-                        foreach (var admin in admins)
+                        foreach (var admin in adminUsers)
                         {
                             context.Notifications.Add(new Notification
                             {
@@ -271,6 +278,7 @@ public class OrderService(
             await transaction.RollbackAsync();
             throw;
         }
+        });
     }
 
     public async Task<OrderDto> GetOrderByIdAsync(Guid id)
@@ -459,12 +467,54 @@ public class OrderService(
         logger.LogInformation("Order {OrderId} status updated to {Status}", id, status);
     }
 
-    public async Task<IEnumerable<OrderDto>> GetActiveOrdersAsync()
+    public async Task<PagedResult<OrderDto>> GetActiveOrdersAsync(int page = 1, int pageSize = 50)
     {
-        var result = await GetOrdersAsync(pageSize: 100);
-        return result.Items.Where(o =>
-            o.Status != OrderStatus.Completed.ToString() &&
-            o.Status != OrderStatus.Cancelled.ToString());
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Orders
+            .AsNoTracking()
+            .Include(o => o.Waiter)
+            .Include(o => o.Table)
+            .Include(o => o.Items).ThenInclude(i => i.Product)
+            .Where(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
+            .OrderByDescending(o => o.CreatedAt);
+
+        var totalCount = await query.CountAsync();
+        var orders = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
+            .ToListAsync();
+
+        var items = orders.Select(o => new OrderDto
+        {
+            Id = o.Id,
+            WaiterId = o.WaiterId,
+            WaiterName = o.Waiter.FullName,
+            TableId = o.TableId,
+            TableNumber = o.Table?.TableNumber,
+            Status = o.Status.ToString(),
+            Type = o.Type.ToString(),
+            IsPartnerOrder = o.IsPartnerOrder,
+            TotalAmount = o.TotalAmount,
+            Notes = o.Notes,
+            CreatedAt = o.CreatedAt,
+            UpdatedAt = o.UpdatedAt,
+            CompletedAt = o.CompletedAt,
+            Items = o.Items.Select(i => new OrderItemDto
+            {
+                Id = i.Id,
+                ProductId = i.ProductId,
+                ProductName = i.Product.Name,
+                PreparationLocation = i.Product.Location.ToString(),
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                Subtotal = i.Subtotal,
+                Notes = i.Notes,
+                Status = i.Status.ToString(),
+                CreatedAt = i.CreatedAt
+            }).ToList()
+        }).ToList();
+
+        return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status)
@@ -477,10 +527,19 @@ public class OrderService(
         if (orderItem == null)
             throw new NotFoundException($"Order item with ID {orderItemId} not found");
 
+        var previousStatus = orderItem.Status;
         orderItem.Status = status;
 
-        // ✅ UPDATE ORDER STATUS BASED ON ALL ITEMS
         var order = orderItem.Order;
+
+        // Subtract cancelled item from order total (only once, if not already cancelled)
+        if (status == OrderItemStatus.Cancelled && previousStatus != OrderItemStatus.Cancelled)
+        {
+            order.TotalAmount = Math.Max(0, order.TotalAmount - orderItem.Subtotal);
+            order.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // ✅ UPDATE ORDER STATUS BASED ON ALL ITEMS
         
         // Get all item statuses (including the one we're updating)
         var allItemsStatus = order.Items
@@ -748,10 +807,54 @@ public class OrderService(
         };
     }
 
-    public async Task<List<OrderDto>> GetOrdersByTableAsync(Guid tableId)
+    public async Task<PagedResult<OrderDto>> GetOrdersByTableAsync(Guid tableId, int page = 1, int pageSize = 50)
     {
-        var result = await GetOrdersAsync(pageSize: 100);
-        return result.Items.Where(o => o.TableId == tableId).ToList();
+        var clampedPageSize = Math.Min(pageSize, 100);
+        var query = context.Orders
+            .AsNoTracking()
+            .Include(o => o.Waiter)
+            .Include(o => o.Table)
+            .Include(o => o.Items).ThenInclude(i => i.Product)
+            .Where(o => o.TableId == tableId)
+            .OrderByDescending(o => o.CreatedAt);
+
+        var totalCount = await query.CountAsync();
+        var orders = await query
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
+            .ToListAsync();
+
+        var items = orders.Select(o => new OrderDto
+        {
+            Id = o.Id,
+            WaiterId = o.WaiterId,
+            WaiterName = o.Waiter.FullName,
+            TableId = o.TableId,
+            TableNumber = o.Table?.TableNumber,
+            Status = o.Status.ToString(),
+            Type = o.Type.ToString(),
+            IsPartnerOrder = o.IsPartnerOrder,
+            TotalAmount = o.TotalAmount,
+            Notes = o.Notes,
+            CreatedAt = o.CreatedAt,
+            UpdatedAt = o.UpdatedAt,
+            CompletedAt = o.CompletedAt,
+            Items = o.Items.Select(i => new OrderItemDto
+            {
+                Id = i.Id,
+                ProductId = i.ProductId,
+                ProductName = i.Product.Name,
+                PreparationLocation = i.Product.Location.ToString(),
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                Subtotal = i.Subtotal,
+                Notes = i.Notes,
+                Status = i.Status.ToString(),
+                CreatedAt = i.CreatedAt
+            }).ToList()
+        }).ToList();
+
+        return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
     public async Task CompleteOrderAsync(Guid orderId)
@@ -759,8 +862,9 @@ public class OrderService(
         await UpdateOrderStatusAsync(orderId, OrderStatus.Completed);
     }
 
-    public async Task<List<OrderItemDto>> GetOrderItemsByLocationAsync(PreparationLocation location, OrderItemStatus? status = null)
+    public async Task<PagedResult<OrderItemDto>> GetOrderItemsByLocationAsync(PreparationLocation location, OrderItemStatus? status = null, int page = 1, int pageSize = 100)
     {
+        var clampedPageSize = Math.Min(pageSize, 200);
         var query = context.OrderItems
             .AsNoTracking()
             .Include(oi => oi.Product)
@@ -778,11 +882,14 @@ public class OrderService(
         else
             query = query.Where(oi => oi.Status == OrderItemStatus.Pending || oi.Status == OrderItemStatus.Preparing);
 
-        var items = await query
+        var totalCount = await query.CountAsync();
+        var rawItems = await query
             .OrderBy(oi => oi.CreatedAt)
+            .Skip((page - 1) * clampedPageSize)
+            .Take(clampedPageSize)
             .ToListAsync();
 
-        return items.Select(i => new OrderItemDto
+        var dtoItems = rawItems.Select(i => new OrderItemDto
         {
             Id = i.Id,
             ProductId = i.ProductId,
@@ -801,5 +908,7 @@ public class OrderService(
                 ExtraCharge = oia.PriceAtOrder
             }).ToList()
         }).ToList();
+
+        return new PagedResult<OrderItemDto> { Items = dtoItems, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 }

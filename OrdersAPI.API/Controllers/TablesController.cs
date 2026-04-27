@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
@@ -29,7 +30,7 @@ public class TablesController(ITableService tableService) : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<TableDto>> CreateTable([FromBody] CreateTableDto dto)
     {
         var table = await tableService.CreateTableAsync(dto);
@@ -37,7 +38,7 @@ public class TablesController(ITableService tableService) : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateTable(Guid id, [FromBody] UpdateTableDto dto)
     {
         await tableService.UpdateTableAsync(id, dto);
@@ -53,7 +54,7 @@ public class TablesController(ITableService tableService) : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteTable(Guid id)
     {
         await tableService.DeleteTableAsync(id);

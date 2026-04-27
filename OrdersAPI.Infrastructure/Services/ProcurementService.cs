@@ -67,7 +67,7 @@ public class ProcurementService : IProcurementService
                 {
                     Id = i.Id,
                     StoreProductId = i.StoreProductId,
-                    StoreProductName = i.StoreProduct.Name,
+                    StoreProductName = i.StoreProduct != null ? i.StoreProduct.Name : string.Empty,
                     Quantity = i.Quantity,
                     UnitCost = i.UnitCost,
                     Subtotal = i.Subtotal
@@ -104,7 +104,7 @@ public class ProcurementService : IProcurementService
                 {
                     Id = i.Id,
                     StoreProductId = i.StoreProductId,
-                    StoreProductName = i.StoreProduct.Name,
+                    StoreProductName = i.StoreProduct != null ? i.StoreProduct.Name : string.Empty,
                     Quantity = i.Quantity,
                     UnitCost = i.UnitCost,
                     Subtotal = i.Subtotal
@@ -152,12 +152,31 @@ public class ProcurementService : IProcurementService
             if (storeProduct == null)
                 throw new NotFoundException($"Store product with ID {itemDto.StoreProductId} not found");
 
-            // If ordering from an internal source store, check available stock
             if (sourceStoreIsInternal)
             {
+                // Internal source: check stock now, deduct when received
                 if (storeProduct.CurrentStock < itemDto.Quantity)
                     throw new BusinessException(
                         $"Insufficient stock for '{storeProduct.Name}'. Available: {storeProduct.CurrentStock}, Requested: {itemDto.Quantity}");
+            }
+            else if (dto.SourceStoreId.HasValue)
+            {
+                // External source: deduct stock immediately on order creation
+                if (storeProduct.CurrentStock < itemDto.Quantity)
+                    throw new BusinessException(
+                        $"Insufficient stock for '{storeProduct.Name}'. Available: {storeProduct.CurrentStock}, Requested: {itemDto.Quantity}");
+
+                storeProduct.CurrentStock -= itemDto.Quantity;
+
+                _context.InventoryLogs.Add(new InventoryLog
+                {
+                    Id = Guid.NewGuid(),
+                    StoreProductId = storeProduct.Id,
+                    QuantityChange = -itemDto.Quantity,
+                    Type = InventoryLogType.Sale,
+                    Reason = $"Procurement order placed to store {dto.StoreId} (Order ID: {procurement.Id})",
+                    CreatedAt = DateTime.UtcNow
+                });
             }
 
             var unitCost = itemDto.UnitCost ?? storeProduct.PurchasePrice;
@@ -176,20 +195,6 @@ public class ProcurementService : IProcurementService
 
         procurement.TotalAmount = totalAmount;
         _context.ProcurementOrders.Add(procurement);
-
-        // Log that a procurement order was placed (before any stock movement)
-        foreach (var item in procurement.Items)
-        {
-            _context.InventoryLogs.Add(new InventoryLog
-            {
-                Id = Guid.NewGuid(),
-                StoreProductId = item.StoreProductId,
-                QuantityChange = 0,
-                Type = InventoryLogType.Adjustment,
-                Reason = $"Procurement order placed (Order ID: {procurement.Id}, Qty requested: {item.Quantity})",
-                CreatedAt = DateTime.UtcNow
-            });
-        }
 
         await _context.SaveChangesAsync();
 
@@ -287,6 +292,7 @@ public class ProcurementService : IProcurementService
         var order = await _context.ProcurementOrders
             .Include(p => p.Items)
                 .ThenInclude(i => i.StoreProduct)
+            .Include(p => p.SourceStore)
             .FirstOrDefaultAsync(p => p.Id == procurementOrderId);
 
         if (order == null)
@@ -294,6 +300,9 @@ public class ProcurementService : IProcurementService
 
         if (order.Status != ProcurementStatus.Paid)
             throw new BusinessException("Order must be paid before receiving");
+
+        // External source stores already had stock deducted at order creation
+        bool sourceIsInternal = order.SourceStore != null && !order.SourceStore.IsExternal;
 
         foreach (var receivedItem in dto.Items)
         {
@@ -331,8 +340,8 @@ public class ProcurementService : IProcurementService
                     orderItem.StoreProduct.Name, order.StoreId, procurementOrderId);
             }
 
-            // Decrease source store stock
-            if (order.SourceStoreId.HasValue)
+            // Decrease source store stock only for internal stores (external already deducted at creation)
+            if (order.SourceStoreId.HasValue && sourceIsInternal)
             {
                 orderItem.StoreProduct.CurrentStock -= receivedItem.ReceivedQuantity;
 
@@ -342,7 +351,7 @@ public class ProcurementService : IProcurementService
                     StoreProductId = orderItem.StoreProductId,
                     QuantityChange = -receivedItem.ReceivedQuantity,
                     Type = InventoryLogType.Sale,
-                    Reason = $"Procurement Order {order.Id} - Sold {receivedItem.ReceivedQuantity} to store {order.StoreId}",
+                    Reason = $"Procurement Order {order.Id} - Transferred {receivedItem.ReceivedQuantity} to store {order.StoreId}",
                     CreatedAt = DateTime.UtcNow
                 });
             }
@@ -360,5 +369,105 @@ public class ProcurementService : IProcurementService
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Procurement order {OrderId} fully received and inventory updated", procurementOrderId);
+    }
+
+    public async Task<string> CreateCheckoutSessionAsync(Guid procurementOrderId)
+    {
+        var order = await _context.ProcurementOrders.FindAsync(procurementOrderId);
+        if (order == null)
+            throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
+
+        if (order.Status != ProcurementStatus.Pending)
+            throw new BusinessException("Order is not in pending status");
+
+        return await _stripeService.CreateCheckoutSessionAsync(procurementOrderId.ToString(), order.TotalAmount, "bam");
+    }
+
+    public async Task<string> HandleCheckoutSuccessAsync(Guid procurementOrderId, string sessionId)
+    {
+        var order = await _context.ProcurementOrders.FindAsync(procurementOrderId);
+        if (order == null)
+            throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
+
+        var session = await _stripeService.GetCheckoutSessionAsync(sessionId);
+        if (session.PaymentStatus != "paid")
+            throw new BusinessException($"Payment not completed. Status: {session.PaymentStatus}");
+
+        if (order.Status == ProcurementStatus.Pending)
+        {
+            order.Status = ProcurementStatus.Paid;
+            order.StripePaymentIntentId = session.PaymentIntentId;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Payment successful for procurement order {OrderId}", procurementOrderId);
+        }
+
+        return session.PaymentIntentId ?? string.Empty;
+    }
+
+    public async Task HandleWebhookCheckoutCompletedAsync(WebhookEventDto eventDto)
+    {
+        if (!string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
+            Guid.TryParse(eventDto.ProcurementOrderId, out var metadataOrderId))
+        {
+            var order = await _context.ProcurementOrders.FindAsync(metadataOrderId);
+            if (order != null)
+            {
+                if (order.Status == ProcurementStatus.Paid) return;
+                if (order.Status != ProcurementStatus.Pending) return;
+                order.Status = ProcurementStatus.Paid;
+                order.StripePaymentIntentId = eventDto.PaymentIntentId;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Procurement order {OrderId} marked as PAID via checkout metadata", order.Id);
+                return;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(eventDto.PaymentIntentId))
+        {
+            var order = await _context.ProcurementOrders
+                .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
+            if (order != null)
+            {
+                if (order.Status == ProcurementStatus.Paid) return;
+                if (order.Status != ProcurementStatus.Pending) return;
+                order.Status = ProcurementStatus.Paid;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Procurement order {OrderId} marked as PAID via PI fallback", order.Id);
+            }
+        }
+    }
+
+    public async Task HandleWebhookPaymentSucceededAsync(WebhookEventDto eventDto)
+    {
+        var order = await _context.ProcurementOrders
+            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
+
+        if (order == null &&
+            !string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
+            Guid.TryParse(eventDto.ProcurementOrderId, out var procId))
+        {
+            order = await _context.ProcurementOrders.FindAsync(procId);
+        }
+
+        if (order == null) return;
+        if (order.Status != ProcurementStatus.Pending) return;
+
+        order.Status = ProcurementStatus.Paid;
+        if (string.IsNullOrEmpty(order.StripePaymentIntentId))
+            order.StripePaymentIntentId = eventDto.PaymentIntentId;
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Procurement order {OrderId} marked as PAID via payment_intent.succeeded", order.Id);
+    }
+
+    public async Task HandleWebhookChargeRefundedAsync(WebhookEventDto eventDto)
+    {
+        var order = await _context.ProcurementOrders
+            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
+
+        if (order != null)
+            _logger.LogInformation("Procurement order {OrderId} refunded", order.Id);
+
+        await Task.CompletedTask;
     }
 }

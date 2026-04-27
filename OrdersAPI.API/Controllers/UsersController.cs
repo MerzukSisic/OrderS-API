@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
@@ -9,7 +10,7 @@ namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 public class UsersController(IUserService userService) : ControllerBase
 {
     [HttpGet]

@@ -8,20 +8,20 @@ public class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
     public CreateOrderDtoValidator()
     {
         RuleFor(x => x.Type)
-            .NotEmpty().WithMessage("Tip narud얺e je obavezan")
+            .NotEmpty().WithMessage("Tip narud탑be je obavezan")
             .Must(x => x == "DineIn" || x == "TakeAway")
             .WithMessage("Tip mora biti: DineIn ili TakeAway");
 
         RuleFor(x => x.Items)
-            .NotEmpty().WithMessage("Narud얺a mora imati najmanje jednu stavku")
-            .Must(x => x.Count > 0).WithMessage("Narud얺a mora imati najmanje jednu stavku");
+            .NotEmpty().WithMessage("Narud탑ba mora imati najmanje jednu stavku")
+            .Must(x => x.Count > 0).WithMessage("Narud탑ba mora imati najmanje jednu stavku");
 
         RuleForEach(x => x.Items).SetValidator(new CreateOrderItemDtoValidator());
 
         RuleFor(x => x.TableId)
             .NotEmpty()
             .When(x => x.Type == "DineIn")
-            .WithMessage("TableId je obavezan za DineIn narud얺e");
+            .WithMessage("TableId je obavezan za DineIn Narud탑be");
     }
 }
 
@@ -33,7 +33,7 @@ public class CreateOrderItemDtoValidator : AbstractValidator<CreateOrderItemDto>
             .NotEmpty().WithMessage("ProductId je obavezan");
 
         RuleFor(x => x.Quantity)
-            .GreaterThan(0).WithMessage("Kolicina mora biti veca od 0")
-            .LessThanOrEqualTo(100).WithMessage("Kolicina ne mo엁 biti veca od 100");
+            .GreaterThan(0).WithMessage("Koli훾ina mora biti veca od 0")
+            .LessThanOrEqualTo(100).WithMessage("Koli훾ina ne mo탑e biti veca od 100");
     }
 }

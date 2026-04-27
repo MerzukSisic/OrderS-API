@@ -12,14 +12,18 @@ public class StripeService : IStripeService
     private readonly IConfiguration _configuration;
     private readonly ILogger<StripeService> _logger;
     private readonly string _webhookSecret;
+    private readonly string _publicBaseUrl;
 
     public StripeService(IConfiguration configuration, ILogger<StripeService> logger)
     {
         _configuration = configuration;
         _logger = logger;
     
-        StripeConfiguration.ApiKey = _configuration["Stripe:SecretKey"];
+        StripeConfiguration.ApiKey = _configuration["Stripe:SecretKey"]
+            ?? throw new InvalidOperationException("Stripe:SecretKey not configured");
         _webhookSecret = _configuration["Stripe:WebhookSecret"] ?? string.Empty;
+        _publicBaseUrl = (_configuration["App:PublicBaseUrl"]
+            ?? throw new InvalidOperationException("App:PublicBaseUrl not configured")).TrimEnd('/');
     
         _logger.LogInformation("🔑 Webhook secret: {State}",
             string.IsNullOrEmpty(_webhookSecret) ? "not configured" : "configured");
@@ -237,8 +241,8 @@ public class StripeService : IStripeService
                     },
                 },
                 Mode = "payment",
-                SuccessUrl = $"http://localhost:5220/api/procurement/{procurementOrderId}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
-                CancelUrl = $"http://localhost:5220/api/procurement/{procurementOrderId}/payment-cancel",
+                SuccessUrl = $"{_publicBaseUrl}/api/procurement/{procurementOrderId}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+                CancelUrl = $"{_publicBaseUrl}/api/procurement/{procurementOrderId}/payment-cancel",
                 Metadata = new Dictionary<string, string>
                 {
                     { "procurementOrderId", procurementOrderId },

@@ -30,7 +30,8 @@ public class ReceiptService(ApplicationDbContext context, ILogger<ReceiptService
         if (order == null)
             throw new NotFoundException($"Order with ID {orderId} not found");
 
-        var subtotal = order.Items.Sum(i => i.Subtotal);
+        var activeItems = order.Items.Where(i => i.Status != OrderItemStatus.Cancelled).ToList();
+        var subtotal = activeItems.Sum(i => i.Subtotal);
         var discount = order.IsPartnerOrder ? subtotal * PARTNER_DISCOUNT : 0;
         var taxableAmount = subtotal - discount;
         var tax = taxableAmount * TAX_RATE;
@@ -47,7 +48,7 @@ public class ReceiptService(ApplicationDbContext context, ILogger<ReceiptService
             OrderType = order.Type.ToString(),
             Status = order.Status.ToString(),
             IsPartnerOrder = order.IsPartnerOrder,
-            Items = order.Items.Select(i => new ReceiptItemDto
+            Items = activeItems.Select(i => new ReceiptItemDto
             {
                 ProductName = i.Product.Name,
                 Quantity = i.Quantity,

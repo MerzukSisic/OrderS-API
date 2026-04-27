@@ -42,10 +42,29 @@ public class UpdateUserDto
     [StringLength(100, MinimumLength = 3)]
     public string? FullName { get; set; }
 
+    [EmailAddress]
+    public string? Email { get; set; }
+
     [Phone]
     public string? PhoneNumber { get; set; }
 
+    public string? Role { get; set; }
+
     public bool? IsActive { get; set; }
+}
+
+public class UpdateProfileDto
+{
+    [Required]
+    [StringLength(100, MinimumLength = 3)]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Phone]
+    public string? PhoneNumber { get; set; }
 }
 
 public class ChangePasswordDto

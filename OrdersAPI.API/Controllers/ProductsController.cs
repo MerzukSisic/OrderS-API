@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
+using OrdersAPI.Domain.Constants;
 using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
@@ -35,24 +36,37 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> SearchProducts([FromQuery] string term)
+    public async Task<ActionResult<IEnumerable<ProductDto>>> SearchProducts(
+        [FromQuery] string term,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var products = await productService.SearchProductsAsync(term);
-        return Ok(products);
+        var result = await productService.SearchProductsAsync(term, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpGet("by-location")]
-    public async Task<ActionResult<List<ProductDto>>> GetProductsByLocation(
+    public async Task<ActionResult<IEnumerable<ProductDto>>> GetProductsByLocation(
         [FromQuery] string location,
-        [FromQuery] bool? isAvailable = null)
+        [FromQuery] bool? isAvailable = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         var preparationLocation = Enum.Parse<PreparationLocation>(location);
-        var products = await productService.GetProductsByLocationAsync(preparationLocation, isAvailable);
-        return Ok(products);
+        var result = await productService.GetProductsByLocationAsync(preparationLocation, isAvailable, page, pageSize);
+        Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
+        Response.Headers["X-Page"] = result.Page.ToString();
+        Response.Headers["X-Page-Size"] = result.PageSize.ToString();
+        Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
+        return Ok(result.Items);
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<ProductDto>> CreateProduct([FromBody] CreateProductDto dto)
     {
         var product = await productService.CreateProductAsync(dto);
@@ -60,7 +74,7 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateProduct(Guid id, [FromBody] UpdateProductDto dto)
     {
         await productService.UpdateProductAsync(id, dto);
@@ -68,7 +82,7 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpPut("{id}/toggle-availability")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<object>> ToggleAvailability(Guid id)
     {
         var isAvailable = await productService.ToggleAvailabilityAsync(id);
@@ -76,7 +90,7 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpPut("bulk-availability")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> BulkUpdateAvailability([FromBody] BulkUpdateAvailabilityDto dto)
     {
         await productService.BulkUpdateAvailabilityAsync(dto.ProductIds, dto.IsAvailable);
@@ -84,7 +98,7 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteProduct(Guid id)
     {
         await productService.DeleteProductAsync(id);

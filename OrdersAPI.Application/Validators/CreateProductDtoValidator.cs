@@ -10,11 +10,11 @@ public class CreateProductDtoValidator : AbstractValidator<CreateProductDto>
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Ime proizvoda je obavezno")
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Ime ne moûe biti duûe od 100 karaktera");
+            .MaximumLength(100).WithMessage("Ime ne mo≈æe biti du≈æe od 100 karaktera");
 
         RuleFor(x => x.Price)
-            .GreaterThan(0).WithMessage("Cijena mora biti veca od 0")
-            .LessThanOrEqualTo(10000).WithMessage("Cijena ne moûe biti veca od 10000");
+            .GreaterThan(0).WithMessage("Cijena mora biti veƒáa od 0")
+            .LessThanOrEqualTo(10000).WithMessage("Cijena ne mo≈æe biti veƒáa od 10000");
 
         RuleFor(x => x.CategoryId)
             .NotEmpty().WithMessage("Kategorija je obavezna");
@@ -26,10 +26,10 @@ public class CreateProductDtoValidator : AbstractValidator<CreateProductDto>
 
         RuleFor(x => x.PreparationTimeMinutes)
             .GreaterThan(0).WithMessage("Vrijeme pripreme mora biti vece od 0")
-            .LessThanOrEqualTo(180).WithMessage("Vrijeme pripreme ne moûe biti vece od 180 minuta");
+            .LessThanOrEqualTo(180).WithMessage("Vrijeme pripreme ne mo≈æe biti vece od 180 minuta");
 
         RuleFor(x => x.Stock)
-            .GreaterThanOrEqualTo(0).WithMessage("Stock ne moûe biti negativan");
+            .GreaterThanOrEqualTo(0).WithMessage("Stock ne mo≈æe biti negativan");
     }
 }
 
@@ -39,12 +39,12 @@ public class UpdateProductDtoValidator : AbstractValidator<UpdateProductDto>
     {
         RuleFor(x => x.Name)
             .MinimumLength(2).WithMessage("Ime mora imati najmanje 2 karaktera")
-            .MaximumLength(100).WithMessage("Ime ne moûe biti duûe od 100 karaktera")
+            .MaximumLength(100).WithMessage("Ime ne mo≈æe biti du≈æe od 100 karaktera")
             .When(x => x.Name != null);
 
         RuleFor(x => x.Price)
-            .GreaterThan(0).WithMessage("Cijena mora biti veca od 0")
-            .LessThanOrEqualTo(10000).WithMessage("Cijena ne moûe biti veca od 10000")
+            .GreaterThan(0).WithMessage("Cijena mora biti veƒáa od 0")
+            .LessThanOrEqualTo(10000).WithMessage("Cijena ne mo≈æe biti veƒáa od 10000")
             .When(x => x.Price.HasValue);
 
         RuleFor(x => x.PreparationLocation)
@@ -54,11 +54,11 @@ public class UpdateProductDtoValidator : AbstractValidator<UpdateProductDto>
 
         RuleFor(x => x.PreparationTimeMinutes)
             .GreaterThan(0).WithMessage("Vrijeme pripreme mora biti vece od 0")
-            .LessThanOrEqualTo(180).WithMessage("Vrijeme pripreme ne moûe biti vece od 180 minuta")
+            .LessThanOrEqualTo(180).WithMessage("Vrijeme pripreme ne mo≈æe biti vece od 180 minuta")
             .When(x => x.PreparationTimeMinutes.HasValue);
 
         RuleFor(x => x.Stock)
-            .GreaterThanOrEqualTo(0).WithMessage("Stock ne moûe biti negativan")
+            .GreaterThanOrEqualTo(0).WithMessage("Stock ne mo≈æe biti negativan")
             .When(x => x.Stock.HasValue);
     }
 }

@@ -19,6 +19,11 @@ public class ProductDto
     public List<AccompanimentGroupDto> AccompanimentGroups { get; set; } = new();
 }
 
+public class RecommendedProductDto : ProductDto
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class ProductSummaryDto
 {
     public Guid Id { get; set; }

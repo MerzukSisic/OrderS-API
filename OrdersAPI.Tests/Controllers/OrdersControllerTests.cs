@@ -309,8 +309,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetActiveOrdersAsync())
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetActiveOrdersAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetActiveOrders();
@@ -324,7 +324,7 @@ public class OrdersControllerTests
         orders.Should().HaveCount(2);
         orders!.All(o => o.Status != "Completed" && o.Status != "Cancelled").Should().BeTrue();
 
-        _orderServiceMock.Verify(x => x.GetActiveOrdersAsync(), Times.Once);
+        _orderServiceMock.Verify(x => x.GetActiveOrdersAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion
@@ -352,8 +352,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetOrdersByTableAsync(_testTableId))
-            .ReturnsAsync(expectedOrders);
+            .Setup(x => x.GetOrdersByTableAsync(_testTableId, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderDto> { Items = expectedOrders, TotalCount = expectedOrders.Count, Page = 1, PageSize = 50 });
 
         // Act
         var result = await _controller.GetOrdersByTable(_testTableId);
@@ -361,14 +361,14 @@ public class OrdersControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var orders = okResult!.Value as List<OrderDto>;
+        var orders = okResult!.Value as IEnumerable<OrderDto>;
 
         orders.Should().NotBeNull();
         orders.Should().HaveCount(1);
-        orders![0].TableId.Should().Be(_testTableId);
-        orders[0].TableNumber.Should().Be("5");
+        orders!.First().TableId.Should().Be(_testTableId);
+        orders.First().TableNumber.Should().Be("5");
 
-        _orderServiceMock.Verify(x => x.GetOrdersByTableAsync(_testTableId), Times.Once);
+        _orderServiceMock.Verify(x => x.GetOrdersByTableAsync(_testTableId, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion
@@ -397,8 +397,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Kitchen, null))
-            .ReturnsAsync(expectedItems);
+            .Setup(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Kitchen, null, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderItemDto> { Items = expectedItems, TotalCount = expectedItems.Count, Page = 1, PageSize = 100 });
 
         // Act
         var result = await _controller.GetOrderItemsByLocation("Kitchen", null);
@@ -406,13 +406,13 @@ public class OrdersControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var items = okResult!.Value as List<OrderItemDto>;
+        var items = okResult!.Value as IEnumerable<OrderItemDto>;
 
         items.Should().NotBeNull();
         items.Should().HaveCount(1);
-        items![0].PreparationLocation.Should().Be("Kitchen");
+        items!.First().PreparationLocation.Should().Be("Kitchen");
 
-        _orderServiceMock.Verify(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Kitchen, null), Times.Once);
+        _orderServiceMock.Verify(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Kitchen, null, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -434,8 +434,8 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Bar, OrderItemStatus.Pending))
-            .ReturnsAsync(expectedItems);
+            .Setup(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Bar, OrderItemStatus.Pending, It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new PagedResult<OrderItemDto> { Items = expectedItems, TotalCount = expectedItems.Count, Page = 1, PageSize = 100 });
 
         // Act
         var result = await _controller.GetOrderItemsByLocation("Bar", OrderItemStatus.Pending);
@@ -443,14 +443,14 @@ public class OrdersControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        var items = okResult!.Value as List<OrderItemDto>;
+        var items = okResult!.Value as IEnumerable<OrderItemDto>;
 
         items.Should().NotBeNull();
         items.Should().HaveCount(1);
-        items![0].PreparationLocation.Should().Be("Bar");
-        items[0].Status.Should().Be("Pending");
+        items!.First().PreparationLocation.Should().Be("Bar");
+        items.First().Status.Should().Be("Pending");
 
-        _orderServiceMock.Verify(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Bar, OrderItemStatus.Pending), Times.Once);
+        _orderServiceMock.Verify(x => x.GetOrderItemsByLocationAsync(PreparationLocation.Bar, OrderItemStatus.Pending, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     #endregion

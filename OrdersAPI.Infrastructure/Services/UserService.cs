@@ -99,7 +99,9 @@ public class UserService(
             throw new NotFoundException($"User with ID {id} not found");
 
         if (dto.FullName != null) user.FullName = dto.FullName;
+        if (dto.Email != null) user.Email = dto.Email.ToLower().Trim();
         if (dto.PhoneNumber != null) user.PhoneNumber = dto.PhoneNumber;
+        if (dto.Role != null && Enum.TryParse<UserRole>(dto.Role, out var role)) user.Role = role;
         if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
 
         user.UpdatedAt = DateTime.UtcNow;

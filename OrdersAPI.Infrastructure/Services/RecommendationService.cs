@@ -15,70 +15,78 @@ public class RecommendationService(
     private const int POPULAR_PRODUCTS_DAYS = 30;
     private const int SIMILAR_USERS_LIMIT = 20;
 
-    public async Task<IEnumerable<ProductDto>> GetRecommendedProductsAsync(Guid? userId = null, int count = 5)
+    public async Task<IEnumerable<RecommendedProductDto>> GetRecommendedProductsAsync(Guid? userId = null, int count = 5)
     {
-        var recommendations = new List<Product>();
+        var recommendations = new List<(Product Product, string Reason)>();
 
         // 1. TIME-BASED (2 items)
         var hour = DateTime.UtcNow.Hour;
         var timeBasedProducts = await GetTimeBasedProductsInternalAsync(hour);
-        recommendations.AddRange(timeBasedProducts.Take(2));
+        recommendations.AddRange(timeBasedProducts.Take(2).Select(p => (p, GetTimeBasedReason(hour))));
 
         // 2. POPULAR PRODUCTS (3 items)
         var popularProducts = await GetPopularProductsInternalAsync(3);
-        recommendations.AddRange(popularProducts.Where(p => !recommendations.Any(r => r.Id == p.Id)));
+        recommendations.AddRange(popularProducts
+            .Where(p => recommendations.All(r => r.Product.Id != p.Id))
+            .Select(p => (p, "Trending this month")));
 
-        // 3. USER-BASED (2 items) - ako postoji userId
+        // 3. USER-BASED (2 items)
         if (userId.HasValue)
         {
             var userBasedProducts = await GetUserBasedRecommendationsInternalAsync(userId.Value);
-            recommendations.AddRange(userBasedProducts.Where(p => !recommendations.Any(r => r.Id == p.Id)).Take(2));
+            recommendations.AddRange(userBasedProducts
+                .Where(p => recommendations.All(r => r.Product.Id != p.Id))
+                .Take(2)
+                .Select(p => (p, "Based on similar orders")));
         }
 
-        // Fallback - ako nema dovoljno preporuka, dodaj random available products
+        // Fallback
         if (recommendations.Count < count)
         {
+            var existingIds = recommendations.Select(r => r.Product.Id).ToList();
             var fallbackProducts = await context.Products
                 .AsNoTracking()
-                .Where(p => p.IsAvailable && !recommendations.Select(r => r.Id).Contains(p.Id))
-                .OrderBy(p => Guid.NewGuid()) // Random
+                .Where(p => p.IsAvailable && !existingIds.Contains(p.Id))
+                .OrderBy(p => Guid.NewGuid())
                 .Take(count - recommendations.Count)
                 .ToListAsync();
 
-            recommendations.AddRange(fallbackProducts);
+            recommendations.AddRange(fallbackProducts.Select(p => (p, "Available now")));
         }
 
-        // Map to DTO
-        var uniqueRecommendations = recommendations
-            .GroupBy(p => p.Id)
+        var unique = recommendations
+            .GroupBy(r => r.Product.Id)
             .Select(g => g.First())
             .Take(count)
             .ToList();
 
-        var result = await MapToProductDtos(uniqueRecommendations);
+        var result = await MapToRecommendedProductDtos(unique);
 
-        logger.LogInformation("Generated {Count} recommendations for user {UserId}", 
+        logger.LogInformation("Generated {Count} recommendations for user {UserId}",
             result.Count(), userId);
 
         return result;
     }
 
-    public async Task<IEnumerable<ProductDto>> GetPopularProductsAsync(int count = 10)
+    public async Task<IEnumerable<RecommendedProductDto>> GetPopularProductsAsync(int count = 10)
     {
         var products = await GetPopularProductsInternalAsync(count);
-        var result = await MapToProductDtos(products);
+        var result = await MapToRecommendedProductDtos(
+            products.Select(p => (p, "Trending this month")).ToList());
 
         logger.LogInformation("Retrieved {Count} popular products", result.Count());
 
         return result;
     }
 
-    public async Task<IEnumerable<ProductDto>> GetTimeBasedRecommendationsAsync(int hour, int count = 5)
+    public async Task<IEnumerable<RecommendedProductDto>> GetTimeBasedRecommendationsAsync(int hour, int count = 5)
     {
         var products = await GetTimeBasedProductsInternalAsync(hour, count);
-        var result = await MapToProductDtos(products);
+        var reason = GetTimeBasedReason(hour);
+        var result = await MapToRecommendedProductDtos(
+            products.Select(p => (p, reason)).ToList());
 
-        logger.LogInformation("Retrieved {Count} time-based recommendations for hour {Hour}", 
+        logger.LogInformation("Retrieved {Count} time-based recommendations for hour {Hour}",
             result.Count(), hour);
 
         return result;
@@ -188,6 +196,14 @@ public class RecommendationService(
             .ToListAsync();
     }
 
+    private static string GetTimeBasedReason(int hour)
+    {
+        if (hour >= 6 && hour < 11) return "Perfect for breakfast";
+        if (hour >= 11 && hour < 15) return "Popular at lunch";
+        if (hour >= 15 && hour < 18) return "Great for the afternoon";
+        return "Popular this evening";
+    }
+
     private static List<string> GetCategoryFiltersForHour(int hour)
     {
         // BREAKFAST (6-11h)
@@ -204,6 +220,56 @@ public class RecommendationService(
 
         // EVENING/DRINKS (18-23h)
         return new List<string> { "Piće", "Alkoholna pića", "Bezalkoholna pića", "Kokteli" };
+    }
+
+    private async Task<List<RecommendedProductDto>> MapToRecommendedProductDtos(
+        List<(Product Product, string Reason)> productPairs)
+    {
+        var productIds = productPairs.Select(p => p.Product.Id).ToList();
+
+        var fullProducts = await context.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductIngredients)
+                .ThenInclude(pi => pi.StoreProduct)
+            .Where(p => productIds.Contains(p.Id))
+            .ToListAsync();
+
+        var lookup = fullProducts.ToDictionary(p => p.Id);
+
+        return productPairs
+            .Where(pair => lookup.ContainsKey(pair.Product.Id))
+            .Select(pair =>
+            {
+                var p = lookup[pair.Product.Id];
+                return new RecommendedProductDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Description = p.Description,
+                    Price = p.Price,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category.Name,
+                    ImageUrl = p.ImageUrl,
+                    IsAvailable = p.IsAvailable,
+                    PreparationLocation = p.Location.ToString(),
+                    PreparationTimeMinutes = p.PreparationTimeMinutes,
+                    Stock = p.Stock,
+                    CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt,
+                    Ingredients = p.ProductIngredients.Select(pi => new ProductIngredientDto
+                    {
+                        Id = pi.Id,
+                        StoreProductId = pi.StoreProductId,
+                        StoreProductName = pi.StoreProduct.Name,
+                        Quantity = pi.Quantity,
+                        Unit = pi.StoreProduct.Unit.ToString()
+                    }).ToList(),
+                    AccompanimentGroups = new List<AccompanimentGroupDto>(),
+                    Reason = pair.Reason,
+                };
+            })
+            .ToList();
     }
 
     private async Task<List<ProductDto>> MapToProductDtos(List<Product> products)

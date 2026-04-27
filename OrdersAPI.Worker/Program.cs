@@ -10,7 +10,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string not configured");
 
 builder.Services.AddDbContext<WorkerDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(
+        connectionString,
+        sql => sql.EnableRetryOnFailure(maxRetryCount: 10, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null)));
 
 // ==================== MASSTRANSIT (RabbitMQ) ====================
 builder.Services.AddMassTransit(x =>
@@ -19,10 +21,14 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
-        var rabbitPort = ushort.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
-        var rabbitUser = builder.Configuration["RabbitMQ:User"] ?? "guest";
-        var rabbitPassword = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        var rabbitHost = builder.Configuration["RabbitMQ:Host"]
+            ?? throw new InvalidOperationException("RabbitMQ:Host not configured");
+        var rabbitPort = ushort.Parse(builder.Configuration["RabbitMQ:Port"]
+            ?? throw new InvalidOperationException("RabbitMQ:Port not configured"));
+        var rabbitUser = builder.Configuration["RabbitMQ:User"]
+            ?? throw new InvalidOperationException("RabbitMQ:User not configured");
+        var rabbitPassword = builder.Configuration["RabbitMQ:Password"]
+            ?? throw new InvalidOperationException("RabbitMQ:Password not configured");
 
         cfg.Host(rabbitHost, rabbitPort, "/", h =>
         {

@@ -12,7 +12,7 @@ namespace OrdersAPI.API.Controllers;
 public class RecommendationsController(IRecommendationService recommendationService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetRecommendations([FromQuery] int count = 5)
+    public async Task<ActionResult<IEnumerable<RecommendedProductDto>>> GetRecommendations([FromQuery] int count = 5)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var recommendations = await recommendationService.GetRecommendedProductsAsync(userId, count);
@@ -20,16 +20,14 @@ public class RecommendationsController(IRecommendationService recommendationServ
     }
 
     [HttpGet("popular")]
-    [AllowAnonymous] // Public endpoint
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetPopular([FromQuery] int count = 10)
+    public async Task<ActionResult<IEnumerable<RecommendedProductDto>>> GetPopular([FromQuery] int count = 10)
     {
         var products = await recommendationService.GetPopularProductsAsync(count);
         return Ok(products);
     }
 
     [HttpGet("time-based")]
-    [AllowAnonymous] // Public endpoint
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetTimeBasedRecommendations([FromQuery] int count = 5)
+    public async Task<ActionResult<IEnumerable<RecommendedProductDto>>> GetTimeBasedRecommendations([FromQuery] int count = 5)
     {
         var hour = DateTime.UtcNow.Hour;
         var products = await recommendationService.GetTimeBasedRecommendationsAsync(hour, count);

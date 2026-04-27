@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using OrdersAPI.Domain.Constants;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -7,7 +8,7 @@ namespace OrdersAPI.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 public class StoresController(IStoreService storeService) : ControllerBase
 {
     [HttpGet]

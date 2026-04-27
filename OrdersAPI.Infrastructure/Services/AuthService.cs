@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,9 @@ public class AuthService(
     ApplicationDbContext context,
     IConfiguration configuration,
     ILogger<AuthService> logger,
-    IEmailSender emailSender)
+    IEmailSender emailSender,
+    ITokenBlacklistService tokenBlacklist,
+    IHttpContextAccessor httpContextAccessor)
     : IAuthService
 {
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
@@ -77,13 +80,30 @@ public class AuthService(
             UpdatedAt = DateTime.UtcNow
         };
 
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
-
         var accessToken = GenerateJwtToken(user);
         var refreshToken = GenerateSecureToken();
 
-        await PersistRefreshTokenAsync(user.Id, refreshToken);
+        using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            context.Users.Add(user);
+            context.RefreshTokens.Add(new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenHash = HashToken(refreshToken),
+                ExpiresAt = DateTime.UtcNow.AddDays(30),
+                IsRevoked = false,
+                CreatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
 
         logger.LogInformation("User {Email} registered successfully", user.Email);
 
@@ -185,7 +205,19 @@ public class AuthService(
         if (user == null)
             throw new NotFoundException($"User with ID {userId} not found");
 
-        // Revoke all active refresh tokens so the client cannot reuse them
+        // Extract jti and expiry from the current request's token via IHttpContextAccessor
+        var principal = httpContextAccessor.HttpContext?.User;
+        var jti = principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        var expClaim = principal?.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
+        if (jti != null)
+        {
+            var expiry = expClaim != null
+                ? DateTimeOffset.FromUnixTimeSeconds(long.Parse(expClaim)).UtcDateTime
+                : DateTime.UtcNow.AddHours(24);
+            tokenBlacklist.Revoke(jti, expiry);
+        }
+
+        // Revoke all active refresh tokens
         var activeTokens = await context.RefreshTokens
             .Where(t => t.UserId == userId && !t.IsRevoked)
             .ToListAsync();
@@ -199,7 +231,7 @@ public class AuthService(
         if (activeTokens.Count > 0)
             await context.SaveChangesAsync();
 
-        logger.LogInformation("User {Email} logged out, {Count} refresh token(s) revoked",
+        logger.LogInformation("User {Email} logged out, access token blacklisted, {Count} refresh token(s) revoked",
             user.Email, activeTokens.Count);
     }
 
@@ -239,6 +271,25 @@ public class AuthService(
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt
         };
+    }
+
+    public async Task UpdateProfileAsync(Guid userId, UpdateProfileDto dto)
+    {
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+            throw new NotFoundException($"User with ID {userId} not found");
+
+        if (dto.Email != user.Email && await context.Users.AnyAsync(u => u.Email == dto.Email && u.Id != userId))
+            throw new ConflictException($"Email {dto.Email} is already in use");
+
+        user.FullName = dto.FullName;
+        user.Email = dto.Email.ToLower().Trim();
+        user.PhoneNumber = dto.PhoneNumber;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("User {UserId} updated their profile", userId);
     }
 
     public async Task RequestPasswordResetAsync(string email)
@@ -352,6 +403,7 @@ public class AuthService(
 
         var claims = new[]
         {
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Name, user.FullName),

@@ -9,11 +9,11 @@ public class CreateTableDtoValidator : AbstractValidator<CreateTableDto>
     {
         RuleFor(x => x.TableNumber)
             .NotEmpty().WithMessage("Broj stola je obavezan")
-            .MaximumLength(10).WithMessage("Broj stola ne mo엁 biti du엍 od 10 karaktera");
+            .MaximumLength(10).WithMessage("Broj stola ne mo탑e biti du탑i od 10 karaktera");
 
         RuleFor(x => x.Capacity)
             .GreaterThan(0).WithMessage("Kapacitet mora biti veci od 0")
-            .LessThanOrEqualTo(20).WithMessage("Kapacitet ne mo엁 biti veci od 20");
+            .LessThanOrEqualTo(20).WithMessage("Kapacitet ne mo탑e biti veci od 20");
     }
 }
 
@@ -22,12 +22,12 @@ public class UpdateTableDtoValidator : AbstractValidator<UpdateTableDto>
     public UpdateTableDtoValidator()
     {
         RuleFor(x => x.TableNumber)
-            .MaximumLength(10).WithMessage("Broj stola ne mo엁 biti du엍 od 10 karaktera")
+            .MaximumLength(10).WithMessage("Broj stola ne mo탑e biti du탑i od 10 karaktera")
             .When(x => x.TableNumber != null);
 
         RuleFor(x => x.Capacity)
             .GreaterThan(0).WithMessage("Kapacitet mora biti veci od 0")
-            .LessThanOrEqualTo(20).WithMessage("Kapacitet ne mo엁 biti veci od 20")
+            .LessThanOrEqualTo(20).WithMessage("Kapacitet ne mo탑e biti veci od 20")
             .When(x => x.Capacity.HasValue);
 
         RuleFor(x => x.Status)

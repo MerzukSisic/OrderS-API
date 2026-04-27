@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
-using OrdersAPI.Domain.Enums;
-using OrdersAPI.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using OrdersAPI.Domain.Constants;
 
 namespace OrdersAPI.API.Controllers;
 
@@ -13,7 +11,7 @@ namespace OrdersAPI.API.Controllers;
 [Authorize]
 public class PaymentsController(
     IStripeService stripeService,
-    ApplicationDbContext context,
+    IProcurementService procurementService,
     ILogger<PaymentsController> logger) : ControllerBase
 {
     [HttpPost("create-intent")]
@@ -46,7 +44,7 @@ public class PaymentsController(
     }
 
     [HttpPost("refund")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<RefundResponseDto>> RefundPayment([FromBody] RefundRequestDto dto)
     {
         var response = await stripeService.RefundPaymentAsync(dto);
@@ -60,9 +58,6 @@ public class PaymentsController(
         return Ok(response);
     }
 
-    /// <summary>
-    /// Stripe webhook endpoint - automatically updates procurement orders when payments complete
-    /// </summary>
     [HttpPost("webhook")]
     [AllowAnonymous]
     public async Task<IActionResult> HandleWebhook()
@@ -74,37 +69,34 @@ public class PaymentsController(
 
             if (string.IsNullOrEmpty(signature))
             {
-                logger.LogWarning("⚠️ Webhook received without Stripe signature");
+                logger.LogWarning("Webhook received without Stripe signature");
                 return BadRequest("Missing Stripe signature");
             }
 
-            // Parse and validate webhook event
             var eventDto = await stripeService.HandleWebhookAsync(json, signature);
 
-            logger.LogInformation("📨 Webhook received: {EventType} - {EventId}", 
-                eventDto.EventType, eventDto.EventId);
+            logger.LogInformation("Webhook received: {EventType} - {EventId}", eventDto.EventType, eventDto.EventId);
 
-            // Handle different event types
             switch (eventDto.EventType)
             {
                 case "checkout.session.completed":
-                    await HandleCheckoutSessionCompleted(eventDto);
+                    await procurementService.HandleWebhookCheckoutCompletedAsync(eventDto);
                     break;
 
                 case "payment_intent.succeeded":
-                    await HandlePaymentSucceeded(eventDto);
+                    await procurementService.HandleWebhookPaymentSucceededAsync(eventDto);
                     break;
 
                 case "payment_intent.payment_failed":
-                    await HandlePaymentFailed(eventDto);
+                    logger.LogWarning("Payment FAILED for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
                     break;
 
                 case "charge.refunded":
-                    await HandleChargeRefunded(eventDto);
+                    await procurementService.HandleWebhookChargeRefundedAsync(eventDto);
                     break;
 
                 default:
-                    logger.LogInformation("ℹ️ Unhandled webhook event type: {EventType}", eventDto.EventType);
+                    logger.LogInformation("Unhandled webhook event type: {EventType}", eventDto.EventType);
                     break;
             }
 
@@ -112,125 +104,13 @@ public class PaymentsController(
         }
         catch (UnauthorizedAccessException ex)
         {
-            logger.LogError(ex, "❌ Webhook signature verification failed");
+            logger.LogError(ex, "Webhook signature verification failed");
             return Unauthorized("Invalid signature");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "❌ Error processing webhook");
+            logger.LogError(ex, "Error processing webhook");
             return StatusCode(500, new { error = "Webhook processing failed" });
-        }
-    }
-
-    // ==================== WEBHOOK EVENT HANDLERS ====================
-
-    private async Task HandleCheckoutSessionCompleted(WebhookEventDto eventDto)
-    {
-        logger.LogInformation("✅ Processing checkout.session.completed for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
-
-        // 1. Resolve by explicit procurement order ID from session metadata (most reliable)
-        if (!string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
-            Guid.TryParse(eventDto.ProcurementOrderId, out var metadataOrderId))
-        {
-            var order = await context.ProcurementOrders.FindAsync(metadataOrderId);
-            if (order != null)
-            {
-                if (order.Status == ProcurementStatus.Paid)
-                {
-                    logger.LogInformation("ℹ️ Order {OrderId} already paid, skipping (idempotent)", order.Id);
-                    return;
-                }
-                if (order.Status != ProcurementStatus.Pending)
-                {
-                    logger.LogWarning("⚠️ Order {OrderId} is in status {Status}, cannot transition to Paid", order.Id, order.Status);
-                    return;
-                }
-                order.Status = ProcurementStatus.Paid;
-                order.StripePaymentIntentId = eventDto.PaymentIntentId;
-                await context.SaveChangesAsync();
-                logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via checkout metadata", order.Id);
-                return;
-            }
-        }
-
-        // 2. Fallback: lookup by PaymentIntentId (already stored from confirm-payment call)
-        if (!string.IsNullOrEmpty(eventDto.PaymentIntentId))
-        {
-            var order = await context.ProcurementOrders
-                .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
-            if (order != null)
-            {
-                if (order.Status == ProcurementStatus.Paid) return;
-                if (order.Status != ProcurementStatus.Pending)
-                {
-                    logger.LogWarning("⚠️ Order {OrderId} is in status {Status}, cannot transition to Paid (PI fallback)", order.Id, order.Status);
-                    return;
-                }
-                order.Status = ProcurementStatus.Paid;
-                await context.SaveChangesAsync();
-                logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via PI fallback", order.Id);
-                return;
-            }
-        }
-
-        logger.LogWarning("⚠️ No matching procurement order found for checkout webhook PI: {PaymentIntentId}", eventDto.PaymentIntentId);
-    }
-
-    private async Task HandlePaymentSucceeded(WebhookEventDto eventDto)
-    {
-        logger.LogInformation("💰 payment_intent.succeeded: PI={PaymentIntentId} Amount={Amount}",
-            eventDto.PaymentIntentId, eventDto.Amount);
-
-        // 1. Exact match by PaymentIntentId already stored on the order
-        var procurementOrder = await context.ProcurementOrders
-            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
-
-        // 2. Metadata-based lookup (payment intent carries procurementOrderId in its metadata)
-        if (procurementOrder == null &&
-            !string.IsNullOrEmpty(eventDto.ProcurementOrderId) &&
-            Guid.TryParse(eventDto.ProcurementOrderId, out var procId))
-        {
-            procurementOrder = await context.ProcurementOrders.FindAsync(procId);
-        }
-
-        if (procurementOrder == null)
-        {
-            logger.LogInformation("ℹ️ payment_intent.succeeded: no matching procurement order – may be a regular order payment");
-            return;
-        }
-
-        // Idempotency: skip if already handled
-        if (procurementOrder.Status != ProcurementStatus.Pending)
-        {
-            logger.LogInformation("ℹ️ Order {OrderId} already in status {Status}, skipping", procurementOrder.Id, procurementOrder.Status);
-            return;
-        }
-
-        procurementOrder.Status = ProcurementStatus.Paid;
-        if (string.IsNullOrEmpty(procurementOrder.StripePaymentIntentId))
-            procurementOrder.StripePaymentIntentId = eventDto.PaymentIntentId;
-        await context.SaveChangesAsync();
-
-        logger.LogInformation("✅ Procurement order {OrderId} marked as PAID via payment_intent.succeeded", procurementOrder.Id);
-    }
-
-    private Task HandlePaymentFailed(WebhookEventDto eventDto)
-    {
-        logger.LogWarning("❌ Payment FAILED for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
-        return Task.CompletedTask;
-    }
-
-    private async Task HandleChargeRefunded(WebhookEventDto eventDto)
-    {
-        logger.LogInformation("💸 charge.refunded for PI: {PaymentIntentId}, amount: {Amount}",
-            eventDto.PaymentIntentId, eventDto.Amount);
-
-        var procurementOrder = await context.ProcurementOrders
-            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
-
-        if (procurementOrder != null)
-        {
-            logger.LogInformation("💸 Procurement order {OrderId} refunded", procurementOrder.Id);
         }
     }
 }
