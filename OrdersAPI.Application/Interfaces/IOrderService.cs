@@ -14,6 +14,7 @@ public interface IOrderService
 
     Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status);
     Task CancelOrderAsync(Guid orderId, string reason);
+    Task ArchiveOrderAsync(Guid orderId);
     Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto);
     Task<PagedResult<OrderDto>> GetOrdersByTableAsync(Guid tableId, int page = 1, int pageSize = 50);
     Task CompleteOrderAsync(Guid orderId);

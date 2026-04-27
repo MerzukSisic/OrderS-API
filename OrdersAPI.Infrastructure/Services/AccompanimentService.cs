@@ -22,7 +22,7 @@ public class AccompanimentService(
         
         var groups = await context.AccompanimentGroups
             .Include(g => g.Accompaniments.OrderBy(a => a.DisplayOrder))
-            .Where(g => g.ProductId == productId)
+            .Where(g => g.ProductId == productId && !g.Product.IsDeleted && !g.Product.Category.IsDeleted)
             .OrderBy(g => g.DisplayOrder)
             .ToListAsync();
 
@@ -40,7 +40,7 @@ public class AccompanimentService(
 
     public async Task<AccompanimentGroupDto> CreateGroupAsync(CreateAccompanimentGroupDto dto)
     {
-        var productExists = await context.Products.AnyAsync(p => p.Id == dto.ProductId);
+        var productExists = await context.Products.AnyAsync(p => p.Id == dto.ProductId && !p.IsDeleted && !p.Category.IsDeleted);
         if (!productExists)
         {
             logger.LogWarning("Attempted to create accompaniment group for non-existent product {ProductId}", dto.ProductId);

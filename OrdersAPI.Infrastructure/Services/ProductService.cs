@@ -18,6 +18,7 @@ public class ProductService(
         var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Products
             .AsNoTracking()
+            .Where(p => !p.IsDeleted && !p.Category.IsDeleted)
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
@@ -69,6 +70,7 @@ public class ProductService(
     {
         var product = await context.Products
             .AsNoTracking()
+            .Where(p => !p.IsDeleted && !p.Category.IsDeleted)
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
@@ -128,13 +130,14 @@ public class ProductService(
 
     public async Task<ProductDto> CreateProductAsync(CreateProductDto dto)
     {
-        var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId);
+        var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId && !c.IsDeleted);
         if (!categoryExists)
             throw new NotFoundException($"Category with ID {dto.CategoryId} not found");
 
         // Validate all ingredients exist
         var ingredientIds = dto.Ingredients.Select(i => i.StoreProductId).ToList();
         var existingIngredients = await context.StoreProducts
+            .Where(sp => !sp.Store.IsDeleted)
             .Where(sp => ingredientIds.Contains(sp.Id))
             .Select(sp => sp.Id)
             .ToListAsync();
@@ -182,7 +185,8 @@ public class ProductService(
 
    public async Task UpdateProductAsync(Guid id, UpdateProductDto dto)
 {
-    var product = await context.Products
+        var product = await context.Products
+        .Where(p => !p.IsDeleted)
         .Include(p => p.ProductIngredients)
         .Include(p => p.AccompanimentGroups)
             .ThenInclude(ag => ag.Accompaniments)
@@ -193,7 +197,7 @@ public class ProductService(
 
     if (dto.CategoryId.HasValue)
     {
-        var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId.Value);
+        var categoryExists = await context.Categories.AnyAsync(c => c.Id == dto.CategoryId.Value && !c.IsDeleted);
         if (!categoryExists)
             throw new NotFoundException($"Category with ID {dto.CategoryId} not found");
     }
@@ -214,6 +218,17 @@ public class ProductService(
     // ✅ UPDATE INGREDIENTS (if provided)
     if (dto.Ingredients != null)
     {
+        var ingredientIds = dto.Ingredients.Select(i => i.StoreProductId).ToList();
+        var existingIngredients = await context.StoreProducts
+            .Where(sp => !sp.Store.IsDeleted)
+            .Where(sp => ingredientIds.Contains(sp.Id))
+            .Select(sp => sp.Id)
+            .ToListAsync();
+
+        var missingIngredients = ingredientIds.Except(existingIngredients).ToList();
+        if (missingIngredients.Any())
+            throw new NotFoundException($"Store products not found: {string.Join(", ", missingIngredients)}");
+
         // Remove existing ingredients
         context.ProductIngredients.RemoveRange(product.ProductIngredients);
         
@@ -279,20 +294,24 @@ public class ProductService(
         var product = await context.Products
             .Include(p => p.ProductIngredients)
             .Include(p => p.AccompanimentGroups)
-            .FirstOrDefaultAsync(p => p.Id == id);
+            .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
 
         if (product == null)
             throw new NotFoundException($"Product with ID {id} not found");
 
-        // Check if product is used in any active orders
-        var hasActiveOrders = await context.OrderItems
-            .AnyAsync(oi => oi.ProductId == id && 
-                (oi.Order.Status == OrderStatus.Pending || oi.Order.Status == OrderStatus.Preparing));
+        var hasOrderHistory = await context.OrderItems.AnyAsync(oi => oi.ProductId == id);
 
-        if (hasActiveOrders)
-            throw new BusinessException("Cannot delete product with active orders");
+        if (hasOrderHistory)
+        {
+            product.IsDeleted = true;
+            product.IsAvailable = false;
+            product.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            context.Products.Remove(product);
+        }
 
-        context.Products.Remove(product);
         await context.SaveChangesAsync();
         
         logger.LogInformation("Product {ProductId} deleted", id);
@@ -306,6 +325,7 @@ public class ProductService(
         var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Products
             .AsNoTracking()
+            .Where(p => !p.IsDeleted && !p.Category.IsDeleted)
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
@@ -350,7 +370,7 @@ public class ProductService(
     public async Task<bool> ToggleAvailabilityAsync(Guid productId)
     {
         var product = await context.Products.FindAsync(productId);
-        if (product == null)
+        if (product == null || product.IsDeleted)
             throw new NotFoundException($"Product with ID {productId} not found");
 
         product.IsAvailable = !product.IsAvailable;
@@ -369,6 +389,7 @@ public class ProductService(
         var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.Products
             .AsNoTracking()
+            .Where(p => !p.IsDeleted && !p.Category.IsDeleted)
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
@@ -416,7 +437,7 @@ public class ProductService(
     public async Task BulkUpdateAvailabilityAsync(List<Guid> productIds, bool isAvailable)
     {
         var updatedCount = await context.Products
-            .Where(p => productIds.Contains(p.Id))
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.IsAvailable, isAvailable)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));

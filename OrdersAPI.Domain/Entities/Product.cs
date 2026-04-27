@@ -14,6 +14,7 @@ public class Product
     public PreparationLocation Location { get; set; }
     public int PreparationTimeMinutes { get; set; } = 15;
     public int Stock { get; set; }
+    public bool IsDeleted { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

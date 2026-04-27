@@ -46,7 +46,7 @@ public class RecommendationService(
             var existingIds = recommendations.Select(r => r.Product.Id).ToList();
             var fallbackProducts = await context.Products
                 .AsNoTracking()
-                .Where(p => p.IsAvailable && !existingIds.Contains(p.Id))
+                .Where(p => p.IsAvailable && !p.IsDeleted && !p.Category.IsDeleted && !existingIds.Contains(p.Id))
                 .OrderBy(p => Guid.NewGuid())
                 .Take(count - recommendations.Count)
                 .ToListAsync();
@@ -117,7 +117,7 @@ public class RecommendationService(
 
         return await context.Products
             .AsNoTracking()
-            .Where(p => popularProductIds.Contains(p.Id) && p.IsAvailable)
+            .Where(p => popularProductIds.Contains(p.Id) && p.IsAvailable && !p.IsDeleted && !p.Category.IsDeleted)
             .ToListAsync();
     }
 
@@ -129,7 +129,7 @@ public class RecommendationService(
         var query = context.Products
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.IsAvailable)
+            .Where(p => p.IsAvailable && !p.IsDeleted && !p.Category.IsDeleted)
             .AsQueryable();
 
         // Apply category filters
@@ -192,7 +192,7 @@ public class RecommendationService(
 
         return await context.Products
             .AsNoTracking()
-            .Where(p => recommendedProductIds.Contains(p.Id) && p.IsAvailable)
+            .Where(p => recommendedProductIds.Contains(p.Id) && p.IsAvailable && !p.IsDeleted && !p.Category.IsDeleted)
             .ToListAsync();
     }
 
@@ -232,7 +232,7 @@ public class RecommendationService(
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
-            .Where(p => productIds.Contains(p.Id))
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted && !p.Category.IsDeleted)
             .ToListAsync();
 
         var lookup = fullProducts.ToDictionary(p => p.Id);
@@ -282,7 +282,7 @@ public class RecommendationService(
             .Include(p => p.Category)
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
-            .Where(p => productIds.Contains(p.Id))
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted && !p.Category.IsDeleted)
             .ToListAsync();
 
         return fullProducts.Select(p => new ProductDto

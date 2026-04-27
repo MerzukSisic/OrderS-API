@@ -23,7 +23,10 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
         if (cache.TryGetValue(key, out PagedResult<CategoryDto>? cached) && cached != null)
             return cached;
 
-        var query = context.Categories.AsNoTracking().OrderBy(c => c.Name);
+        var query = context.Categories
+            .AsNoTracking()
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.Name);
         var totalCount = await query.CountAsync();
         var categories = await query
             .Skip((page - 1) * clampedPageSize)
@@ -34,7 +37,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
                 Name = c.Name,
                 Description = c.Description,
                 IconName = c.IconName,
-                ProductCount = c.Products.Count,
+                ProductCount = c.Products.Count(p => !p.IsDeleted),
                 CreatedAt = c.CreatedAt
             })
             .ToListAsync();
@@ -47,13 +50,14 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
     {
         var category = await context.Categories
             .AsNoTracking()
+            .Where(c => !c.IsDeleted)
             .Select(c => new CategoryDto
             {
                 Id = c.Id,
                 Name = c.Name,
                 Description = c.Description,
                 IconName = c.IconName,
-                ProductCount = c.Products.Count,
+                ProductCount = c.Products.Count(p => !p.IsDeleted),
                 CreatedAt = c.CreatedAt
             })
             .FirstOrDefaultAsync(c => c.Id == id);
@@ -68,6 +72,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
     {
         var category = await context.Categories
             .AsNoTracking()
+            .Where(c => !c.IsDeleted)
             .Include(c => c.Products)
             .FirstOrDefaultAsync(c => c.Id == id);
 
@@ -81,7 +86,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
             Description = category.Description,
             IconName = category.IconName,
             CreatedAt = category.CreatedAt,
-            Products = category.Products.Select(p => new ProductSummaryDto
+            Products = category.Products.Where(p => !p.IsDeleted).Select(p => new ProductSummaryDto
             {
                 Id = p.Id,
                 Name = p.Name,
@@ -130,7 +135,7 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
     public async Task UpdateCategoryAsync(Guid id, UpdateCategoryDto dto)
     {
         var category = await context.Categories.FindAsync(id);
-        if (category == null)
+        if (category == null || category.IsDeleted)
             throw new NotFoundException($"Category with ID {id} not found");
 
         if (dto.Name != null) category.Name = dto.Name;
@@ -147,15 +152,20 @@ public class CategoryService(ApplicationDbContext context, ILogger<CategoryServi
     {
         var category = await context.Categories
             .Include(c => c.Products)
-            .FirstOrDefaultAsync(c => c.Id == id);
+            .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
 
         if (category == null)
             throw new NotFoundException($"Category with ID {id} not found");
 
-        if (category.Products.Any())
-            throw new BusinessException($"Cannot delete category with {category.Products.Count} products. Delete or reassign products first.");
+        category.IsDeleted = true;
 
-        context.Categories.Remove(category);
+        foreach (var product in category.Products)
+        {
+            product.IsDeleted = true;
+            product.IsAvailable = false;
+            product.UpdatedAt = DateTime.UtcNow;
+        }
+
         await context.SaveChangesAsync();
         cache.Remove(CacheKey(1, 100));
 

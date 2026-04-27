@@ -21,7 +21,10 @@ public class StoreService(ApplicationDbContext context, IMemoryCache cache) : IS
         if (cache.TryGetValue(key, out PagedResult<StoreDto>? cached) && cached != null)
             return cached;
 
-        var query = context.Stores.Include(s => s.StoreProducts).AsNoTracking();
+        var query = context.Stores
+            .Include(s => s.StoreProducts)
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted);
         var totalCount = await query.CountAsync();
         var stores = await query
             .OrderBy(s => s.Name)
@@ -48,7 +51,7 @@ public class StoreService(ApplicationDbContext context, IMemoryCache cache) : IS
     {
         var store = await context.Stores
             .Include(s => s.StoreProducts)
-            .FirstOrDefaultAsync(s => s.Id == id);
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
         if (store == null)
             throw new NotFoundException($"Store with ID {id} not found");
@@ -87,7 +90,7 @@ public class StoreService(ApplicationDbContext context, IMemoryCache cache) : IS
     public async Task UpdateStoreAsync(Guid id, UpdateStoreDto dto)
     {
         var store = await context.Stores.FindAsync(id);
-        if (store == null)
+        if (store == null || store.IsDeleted)
             throw new NotFoundException($"Store with ID {id} not found");
 
         if (!string.IsNullOrEmpty(dto.Name))
@@ -110,15 +113,12 @@ public class StoreService(ApplicationDbContext context, IMemoryCache cache) : IS
     {
         var store = await context.Stores
             .Include(s => s.StoreProducts)
-            .FirstOrDefaultAsync(s => s.Id == id);
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
         if (store == null)
             throw new NotFoundException($"Store with ID {id} not found");
 
-        if (store.StoreProducts.Any())
-            throw new BusinessException("Cannot delete store with products. Remove products first.");
-
-        context.Stores.Remove(store);
+        store.IsDeleted = true;
         await context.SaveChangesAsync();
         cache.Remove(CacheKey(1, 100));
     }

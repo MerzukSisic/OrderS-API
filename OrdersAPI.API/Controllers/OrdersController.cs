@@ -112,6 +112,20 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id}/archive")]
+    public async Task<IActionResult> ArchiveOrder(Guid id)
+    {
+        await orderService.ArchiveOrderAsync(id);
+        return NoContent();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteOrder(Guid id)
+    {
+        await orderService.ArchiveOrderAsync(id);
+        return NoContent();
+    }
+
     [HttpPost("{id}/items")]
     public async Task<ActionResult<OrderItemDto>> AddItemToOrder(Guid id, [FromBody] CreateOrderItemDto dto)
     {

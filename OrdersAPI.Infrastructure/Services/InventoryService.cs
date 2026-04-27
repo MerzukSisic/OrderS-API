@@ -17,6 +17,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         var query = context.StoreProducts
             .AsNoTracking()
             .Include(sp => sp.Store)
+            .Where(sp => !sp.Store.IsDeleted)
             .AsQueryable();
 
         if (storeId.HasValue)
@@ -48,6 +49,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         var product = await context.StoreProducts
             .AsNoTracking()
             .Include(sp => sp.Store)
+            .Where(sp => !sp.Store.IsDeleted)
             .Select(sp => new StoreProductDto
             {
                 Id = sp.Id,
@@ -73,7 +75,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
     public async Task<StoreProductDto> CreateStoreProductAsync(CreateStoreProductDto dto)
     {
-        var storeExists = await context.Stores.AnyAsync(s => s.Id == dto.StoreId);
+        var storeExists = await context.Stores.AnyAsync(s => s.Id == dto.StoreId && !s.IsDeleted);
         if (!storeExists)
             throw new NotFoundException($"Store with ID {dto.StoreId} not found");
 
@@ -101,7 +103,9 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
     public async Task UpdateStoreProductAsync(Guid id, UpdateStoreProductDto dto)
     {
-        var product = await context.StoreProducts.FindAsync(id);
+        var product = await context.StoreProducts
+            .Include(sp => sp.Store)
+            .FirstOrDefaultAsync(sp => sp.Id == id && !sp.Store.IsDeleted);
         if (product == null)
             throw new NotFoundException($"Store product with ID {id} not found");
 
@@ -119,7 +123,9 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
     public async Task DeleteStoreProductAsync(Guid id)
     {
-        var product = await context.StoreProducts.FindAsync(id);
+        var product = await context.StoreProducts
+            .Include(sp => sp.Store)
+            .FirstOrDefaultAsync(sp => sp.Id == id && !sp.Store.IsDeleted);
         if (product == null)
             throw new NotFoundException($"Store product with ID {id} not found");
 
@@ -131,7 +137,9 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
     public async Task AdjustInventoryAsync(Guid storeProductId, AdjustInventoryDto dto)
     {
-        var product = await context.StoreProducts.FindAsync(storeProductId);
+        var product = await context.StoreProducts
+            .Include(sp => sp.Store)
+            .FirstOrDefaultAsync(sp => sp.Id == storeProductId && !sp.Store.IsDeleted);
         if (product == null)
             throw new NotFoundException($"Store product with ID {storeProductId} not found");
 
@@ -165,7 +173,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         var products = await context.StoreProducts
             .AsNoTracking()
             .Include(sp => sp.Store)
-            .Where(sp => sp.CurrentStock < sp.MinimumStock)
+            .Where(sp => !sp.Store.IsDeleted && sp.CurrentStock < sp.MinimumStock)
             .Select(sp => new StoreProductDto
             {
                 Id = sp.Id,
@@ -218,7 +226,10 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
     public async Task<decimal> GetTotalStockValueAsync(Guid? storeId = null)
     {
-        var query = context.StoreProducts.AsNoTracking().AsQueryable();
+        var query = context.StoreProducts
+            .AsNoTracking()
+            .Where(sp => !sp.Store.IsDeleted)
+            .AsQueryable();
 
         if (storeId.HasValue)
             query = query.Where(sp => sp.StoreId == storeId);
@@ -238,6 +249,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
         var products = await context.StoreProducts
             .AsNoTracking()
+            .Where(sp => !sp.Store.IsDeleted)
             .Select(sp => new
             {
                 Product = sp,

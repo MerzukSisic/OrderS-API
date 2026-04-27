@@ -67,7 +67,7 @@ public class OrderService(
             var products = await context.Products
                 .Include(p => p.ProductIngredients)
                     .ThenInclude(pi => pi.StoreProduct)
-                .Where(p => productIds.Contains(p.Id))
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted && !p.Category.IsDeleted)
                 .ToListAsync();
             var productLookup = products.ToDictionary(p => p.Id);
 
@@ -312,6 +312,8 @@ public class OrderService(
             CreatedAt = order.CreatedAt,
             UpdatedAt = order.UpdatedAt,
             CompletedAt = order.CompletedAt,
+            IsArchived = order.IsArchived,
+            ArchivedAt = order.ArchivedAt,
             Items = order.Items.Select(i => new OrderItemDto
             {
                 Id = i.Id,
@@ -349,6 +351,7 @@ public class OrderService(
             .Include(o => o.Table)
             .Include(o => o.Items)
                 .ThenInclude(i => i.Product)
+            .Where(o => !o.IsArchived)
             .AsQueryable();
 
         if (waiterId.HasValue)
@@ -386,6 +389,8 @@ public class OrderService(
             CreatedAt = o.CreatedAt,
             UpdatedAt = o.UpdatedAt,
             CompletedAt = o.CompletedAt,
+            IsArchived = o.IsArchived,
+            ArchivedAt = o.ArchivedAt,
             Items = o.Items.Select(i => new OrderItemDto
             {
                 Id = i.Id,
@@ -475,7 +480,7 @@ public class OrderService(
             .Include(o => o.Waiter)
             .Include(o => o.Table)
             .Include(o => o.Items).ThenInclude(i => i.Product)
-            .Where(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
+            .Where(o => !o.IsArchived && o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
             .OrderByDescending(o => o.CreatedAt);
 
         var totalCount = await query.CountAsync();
@@ -499,6 +504,8 @@ public class OrderService(
             CreatedAt = o.CreatedAt,
             UpdatedAt = o.UpdatedAt,
             CompletedAt = o.CompletedAt,
+            IsArchived = o.IsArchived,
+            ArchivedAt = o.ArchivedAt,
             Items = o.Items.Select(i => new OrderItemDto
             {
                 Id = i.Id,
@@ -608,7 +615,10 @@ public class OrderService(
             throw new NotFoundException($"Order with ID {orderId} not found");
 
         if (order.Status == OrderStatus.Completed)
-            throw new BusinessException("Cannot cancel completed order");
+        {
+            await ArchiveOrderAsync(orderId);
+            return;
+        }
 
         // Restore stock
         foreach (var item in order.Items)
@@ -660,6 +670,27 @@ public class OrderService(
         logger.LogInformation("Order {OrderId} cancelled. Reason: {Reason}", orderId, reason);
     }
 
+    public async Task ArchiveOrderAsync(Guid orderId)
+    {
+        var order = await context.Orders.FindAsync(orderId);
+        if (order == null)
+            throw new NotFoundException($"Order with ID {orderId} not found");
+
+        if (order.Status != OrderStatus.Completed && order.Status != OrderStatus.Cancelled)
+            throw new BusinessException("Only completed or cancelled orders can be archived");
+
+        if (order.IsArchived)
+            return;
+
+        order.IsArchived = true;
+        order.ArchivedAt = DateTime.UtcNow;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        logger.LogInformation("Order {OrderId} archived", orderId);
+    }
+
     public async Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto)
     {
         var order = await context.Orders
@@ -677,7 +708,7 @@ public class OrderService(
         var product = await context.Products
             .Include(p => p.ProductIngredients)
                 .ThenInclude(pi => pi.StoreProduct)
-            .FirstOrDefaultAsync(p => p.Id == dto.ProductId);
+            .FirstOrDefaultAsync(p => p.Id == dto.ProductId && !p.IsDeleted && !p.Category.IsDeleted);
 
         if (product == null || !product.IsAvailable)
             throw new BusinessException($"Product {dto.ProductId} is not available");
@@ -815,7 +846,7 @@ public class OrderService(
             .Include(o => o.Waiter)
             .Include(o => o.Table)
             .Include(o => o.Items).ThenInclude(i => i.Product)
-            .Where(o => o.TableId == tableId)
+            .Where(o => o.TableId == tableId && !o.IsArchived)
             .OrderByDescending(o => o.CreatedAt);
 
         var totalCount = await query.CountAsync();
@@ -839,6 +870,8 @@ public class OrderService(
             CreatedAt = o.CreatedAt,
             UpdatedAt = o.UpdatedAt,
             CompletedAt = o.CompletedAt,
+            IsArchived = o.IsArchived,
+            ArchivedAt = o.ArchivedAt,
             Items = o.Items.Select(i => new OrderItemDto
             {
                 Id = i.Id,

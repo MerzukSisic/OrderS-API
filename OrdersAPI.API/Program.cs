@@ -49,7 +49,11 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sql => sql.EnableRetryOnFailure(maxRetryCount: 10, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null)));
+        sql =>
+        {
+            sql.EnableRetryOnFailure(maxRetryCount: 10, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null);
+            sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        }));
 
 // ==================== JWT AUTHENTICATION ====================
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
@@ -153,10 +157,6 @@ if (builder.Configuration["Email:Driver"]?.ToLower() == "smtp")
 else
     builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 
-// ✅ GLOBAL EXCEPTION HANDLER
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-
 // ==================== CORS (OPTIMIZED FOR DESKTOP) ====================
 builder.Services.AddCors(options =>
 {
@@ -193,7 +193,7 @@ using (var scope = app.Services.CreateScope())
 // ==================== MIDDLEWARE PIPELINE ====================
 
 // ✅ 1. EXCEPTION HANDLER - MUST BE FIRST!
-app.UseExceptionHandler(options => { });
+app.UseMiddleware<GlobalExceptionHandler>();
 
 // 2. Swagger (Development only)
 if (app.Environment.IsDevelopment())

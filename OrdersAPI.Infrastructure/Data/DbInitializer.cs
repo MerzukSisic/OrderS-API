@@ -13,6 +13,8 @@ public static class DbInitializer
         // Ensure token tables exist on existing databases (EnsureCreated is no-op when DB already exists).
         // These guards are safe to run on every startup; they only create if absent.
         EnsureTokenTablesExist(context);
+        EnsureSoftDeleteColumnsExist(context);
+        EnsureOrderArchiveColumnsExist(context);
 
         // Proveri da li već postoje podaci
         if (context.Users.Any())
@@ -223,6 +225,52 @@ public static class DbInitializer
                 );
                 CREATE INDEX IX_PasswordResetTokens_TokenHash ON PasswordResetTokens(TokenHash);
                 CREATE INDEX IX_PasswordResetTokens_UserId    ON PasswordResetTokens(UserId);
+            END");
+    }
+
+    private static void EnsureSoftDeleteColumnsExist(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Products', 'IsDeleted') IS NULL
+            BEGIN
+                ALTER TABLE Products ADD IsDeleted BIT NOT NULL CONSTRAINT DF_Products_IsDeleted DEFAULT 0;
+                CREATE INDEX IX_Products_IsDeleted ON Products(IsDeleted);
+            END");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Categories', 'IsDeleted') IS NULL
+            BEGIN
+                ALTER TABLE Categories ADD IsDeleted BIT NOT NULL CONSTRAINT DF_Categories_IsDeleted DEFAULT 0;
+                CREATE INDEX IX_Categories_IsDeleted ON Categories(IsDeleted);
+            END");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Stores', 'IsDeleted') IS NULL
+            BEGIN
+                ALTER TABLE Stores ADD IsDeleted BIT NOT NULL CONSTRAINT DF_Stores_IsDeleted DEFAULT 0;
+                CREATE INDEX IX_Stores_IsDeleted ON Stores(IsDeleted);
+            END");
+    }
+
+    private static void EnsureOrderArchiveColumnsExist(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Orders', 'IsArchived') IS NULL
+            BEGIN
+                ALTER TABLE Orders ADD IsArchived BIT NOT NULL CONSTRAINT DF_Orders_IsArchived DEFAULT 0;
+                CREATE INDEX IX_Orders_IsArchived ON Orders(IsArchived);
+            END");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Orders', 'ArchivedAt') IS NULL
+            BEGIN
+                ALTER TABLE Orders ADD ArchivedAt DATETIME2 NULL;
             END");
     }
 }

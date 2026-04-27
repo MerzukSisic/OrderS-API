@@ -1,18 +1,32 @@
 using FluentValidation;
-using Microsoft.AspNetCore.Diagnostics;
 using OrdersAPI.Domain.Exceptions;
 
 namespace OrdersAPI.API.Middleware;
 
-public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public class GlobalExceptionHandler(
+    RequestDelegate next,
+    ILogger<GlobalExceptionHandler> logger)
 {
-    public async ValueTask<bool> TryHandleAsync(
-        HttpContext httpContext,
-        Exception exception,
-        CancellationToken cancellationToken)
+    public async Task InvokeAsync(HttpContext httpContext)
     {
-        logger.LogError(exception, "An error occurred: {Message}", exception.Message);
+        try
+        {
+            await next(httpContext);
+        }
+        catch (Exception exception)
+        {
+            if (httpContext.Response.HasStarted)
+            {
+                logger.LogError(exception, "An error occurred after the response had already started: {Message}", exception.Message);
+                throw;
+            }
 
+            await HandleExceptionAsync(httpContext, exception);
+        }
+    }
+
+    private async Task HandleExceptionAsync(HttpContext httpContext, Exception exception)
+    {
         var (statusCode, title, errors) = exception switch
         {
             NotFoundException => (
@@ -62,20 +76,28 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
             )
         };
 
+        if (statusCode >= StatusCodes.Status500InternalServerError)
+            logger.LogError(exception, "An unexpected error occurred: {Message}", exception.Message);
+        else if (exception is BusinessException)
+        {
+            // Expected business-rule responses are returned to the client as 422.
+        }
+        else
+            logger.LogWarning("{ExceptionType}: {Message}", exception.GetType().Name, exception.Message);
+
+        httpContext.Response.Clear();
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/json";
 
         var problemDetails = new
         {
-            type = "https://httpstatuses.com/{statusCode}",
+            type = $"https://httpstatuses.com/{statusCode}",
             title,
             status = statusCode,
             errors,
             traceId = httpContext.TraceIdentifier
         };
 
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
-
-        return true;
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, httpContext.RequestAborted);
     }
 }

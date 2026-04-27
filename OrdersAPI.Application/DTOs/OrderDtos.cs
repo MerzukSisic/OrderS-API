@@ -15,6 +15,8 @@ public class OrderDto
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAt { get; set; }
     public List<OrderItemDto> Items { get; set; } = new();
 }
 
