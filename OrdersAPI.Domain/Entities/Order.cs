@@ -5,6 +5,7 @@ namespace OrdersAPI.Domain.Entities;
 public class Order
 {
     public Guid Id { get; set; }
+    public int OrderNumber { get; set; }
     public Guid WaiterId { get; set; }
     public Guid? TableId { get; set; }
     public OrderStatus Status { get; set; } = OrderStatus.Pending;

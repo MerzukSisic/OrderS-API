@@ -6,9 +6,10 @@ public interface INotificationService
 {
     Task<PagedResult<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false, int page = 1, int pageSize = 50);
     Task<NotificationDto> CreateNotificationAsync(Guid userId, string title, string message, string type);
-    Task MarkAsReadAsync(Guid notificationId);
-    Task DeleteNotificationAsync(Guid notificationId);
-    
+    Task MarkAsReadAsync(Guid notificationId, Guid actorUserId, bool isAdmin = false);
+    Task DeleteNotificationAsync(Guid notificationId, Guid actorUserId, bool isAdmin = false);
+    Task CreateSystemNotificationAsync(Guid userId, string title, string message, string type);
+
     Task MarkAllAsReadAsync(Guid userId);
     Task<int> GetUnreadCountAsync(Guid userId);
     Task DeleteReadNotificationsAsync(Guid userId);

@@ -38,7 +38,8 @@ public class UsersController(IUserService userService) : ControllerBase
     [HttpGet("by-role/{role}")]
     public async Task<ActionResult<IEnumerable<UserDto>>> GetUsersByRole(string role)
     {
-        var userRole = Enum.Parse<UserRole>(role, ignoreCase: true);
+        if (!Enum.TryParse<UserRole>(role, ignoreCase: true, out var userRole))
+            return BadRequest($"Invalid role '{role}'. Valid values: {string.Join(", ", Enum.GetNames<UserRole>())}");
         var users = await userService.GetUsersByRoleAsync(userRole);
         return Ok(users);
     }

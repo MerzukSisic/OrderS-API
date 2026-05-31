@@ -22,8 +22,7 @@ public class StripeService : IStripeService
         StripeConfiguration.ApiKey = _configuration["Stripe:SecretKey"]
             ?? throw new InvalidOperationException("Stripe:SecretKey not configured");
         _webhookSecret = _configuration["Stripe:WebhookSecret"] ?? string.Empty;
-        _publicBaseUrl = (_configuration["App:PublicBaseUrl"]
-            ?? throw new InvalidOperationException("App:PublicBaseUrl not configured")).TrimEnd('/');
+        _publicBaseUrl = (_configuration["App:PublicBaseUrl"] ?? string.Empty).TrimEnd('/');
     
         _logger.LogInformation("🔑 Webhook secret: {State}",
             string.IsNullOrEmpty(_webhookSecret) ? "not configured" : "configured");
@@ -216,6 +215,8 @@ public class StripeService : IStripeService
         decimal amount,
         string currency)
     {
+        if (string.IsNullOrEmpty(_publicBaseUrl))
+            throw new InvalidOperationException("App:PublicBaseUrl not configured");
         try
         {
             var (convertedAmount, convertedCurrency) = ConvertCurrency(amount, currency);

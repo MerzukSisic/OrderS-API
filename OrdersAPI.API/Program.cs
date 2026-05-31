@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using OrdersAPI.Application.Extensions;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Infrastructure.Data;
 using OrdersAPI.Infrastructure.Hubs;
@@ -17,7 +18,8 @@ static string RequiredConfig(IConfiguration configuration, string key) =>
     configuration[key] ?? throw new InvalidOperationException($"{key} not configured");
 
 // ==================== CONTROLLERS ====================
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ValidationFilter>());
+builder.Services.AddValidators();
 builder.Services.AddEndpointsApiExplorer();
 
 // ==================== SWAGGER ====================
@@ -145,6 +147,7 @@ builder.Services.AddScoped<IReceiptService, ReceiptService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IAccompanimentService, AccompanimentService>();
 builder.Services.AddScoped<IStoreService, StoreService>();
+builder.Services.AddScoped<IStatusOptionService, StatusOptionService>();
 
 builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 
@@ -162,12 +165,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ConfiguredOrigins", policy =>
     {
-        var allowedOrigins = RequiredConfig(builder.Configuration, "Cors:AllowedOrigins")
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var rawOrigins = builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty;
+        var allowedOrigins = rawOrigins.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (allowedOrigins.Length > 0)
+            policy.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader();
+        else
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     });
     
     // ✅ Specific policy for SignalR with credentials

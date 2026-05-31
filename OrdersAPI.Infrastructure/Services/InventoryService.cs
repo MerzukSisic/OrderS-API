@@ -129,10 +129,23 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         if (product == null)
             throw new NotFoundException($"Store product with ID {id} not found");
 
+        // Fix 24: Provjeri reference prije brisanja - ne smijemo brisati ako postoje veze
+        var hasIngredients = await context.ProductIngredients.AnyAsync(pi => pi.StoreProductId == id);
+        if (hasIngredients)
+            throw new BusinessException($"Store product '{product.Name}' cannot be deleted because it is used in product recipes (ProductIngredients). Remove the ingredient from products first.");
+
+        var hasProcurements = await context.ProcurementOrderItems.AnyAsync(poi => poi.StoreProductId == id);
+        if (hasProcurements)
+            throw new BusinessException($"Store product '{product.Name}' cannot be deleted because it exists in procurement orders. Archive or complete the orders first.");
+
+        var hasLogs = await context.InventoryLogs.AnyAsync(il => il.StoreProductId == id);
+        if (hasLogs)
+            throw new BusinessException($"Store product '{product.Name}' cannot be deleted because it has inventory history logs. These logs are needed for reporting.");
+
         context.StoreProducts.Remove(product);
         await context.SaveChangesAsync();
 
-        logger.LogInformation("Store product {ProductId} deleted", id);
+        logger.LogInformation("Store product {ProductId} ({Name}) deleted", id, product.Name);
     }
 
     public async Task AdjustInventoryAsync(Guid storeProductId, AdjustInventoryDto dto)
@@ -152,12 +165,15 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         if (dto.Type == "Restock")
             product.LastRestocked = DateTime.UtcNow;
 
+        if (!Enum.TryParse<InventoryLogType>(dto.Type, ignoreCase: true, out var logType))
+            throw new BusinessException($"Invalid inventory log type '{dto.Type}'. Valid values: {string.Join(", ", Enum.GetNames<InventoryLogType>())}");
+
         context.InventoryLogs.Add(new InventoryLog
         {
             Id = Guid.NewGuid(),
             StoreProductId = storeProductId,
             QuantityChange = dto.QuantityChange,
-            Type = Enum.Parse<InventoryLogType>(dto.Type),
+            Type = logType,
             Reason = dto.Reason,
             CreatedAt = DateTime.UtcNow
         });
@@ -265,7 +281,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
         {
             var avgDailyConsumption = days > 0 ? (double)p.TotalConsumed / days : 0;
             var daysUntilDepletion = avgDailyConsumption > 0 
-                ? (int)(p.Product.CurrentStock / avgDailyConsumption) 
+                ? (int)((double)p.Product.CurrentStock / avgDailyConsumption)
                 : int.MaxValue;
 
             return new ConsumptionForecastDto
@@ -306,21 +322,17 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
             // Calculate required quantity (decimal from recipe * order quantity)
             var requiredQuantity = ingredient.Quantity * quantity;
             var storeProduct = ingredient.StoreProduct;
-            
-            // Round up to nearest integer (can't deduct partial units)
-            var deductAmount = (int)Math.Ceiling(requiredQuantity);
-            
-            if (storeProduct.CurrentStock >= deductAmount)
-            {
-                // ✅ FIX: Deduct from stock SAMO - uklonjen LastRestocked
-                storeProduct.CurrentStock -= deductAmount;
 
-                // Create inventory log (negative value = deduction)
+            // Fix 4: Koristimo decimal - bez truncation buga
+            if (storeProduct.CurrentStock >= requiredQuantity)
+            {
+                storeProduct.CurrentStock -= requiredQuantity;
+
                 var log = new InventoryLog
                 {
                     Id = Guid.NewGuid(),
                     StoreProductId = storeProduct.Id,
-                    QuantityChange = -deductAmount, // Negative for deduction
+                    QuantityChange = -requiredQuantity,
                     Type = InventoryLogType.Sale,
                     Reason = $"Order - Product: {product.Name} x{quantity}",
                     CreatedAt = DateTime.UtcNow
@@ -330,7 +342,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
 
                 logger.LogInformation(
                     "📦 Deducted {Amount} {Unit} of {Ingredient} for {Product} x{Qty}",
-                    deductAmount,
+                    requiredQuantity,
                     storeProduct.Unit,
                     storeProduct.Name,
                     product.Name,
@@ -354,7 +366,7 @@ public class InventoryService(ApplicationDbContext context, ILogger<InventorySer
                 logger.LogWarning(
                     "❌ INSUFFICIENT STOCK: {Product} - Required: {Required} {Unit}, Available: {Available} {Unit}",
                     storeProduct.Name,
-                    deductAmount,
+                    requiredQuantity,
                     storeProduct.Unit,
                     storeProduct.CurrentStock,
                     storeProduct.Unit);

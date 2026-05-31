@@ -44,7 +44,9 @@ public class NotificationsController(INotificationService notificationService) :
     [HttpPut("{id}/read")]
     public async Task<IActionResult> MarkAsRead(Guid id)
     {
-        await notificationService.MarkAsReadAsync(id);
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var isAdmin = User.IsInRole(Roles.Admin);
+        await notificationService.MarkAsReadAsync(id, userId, isAdmin);
         return NoContent();
     }
 
@@ -59,7 +61,9 @@ public class NotificationsController(INotificationService notificationService) :
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteNotification(Guid id)
     {
-        await notificationService.DeleteNotificationAsync(id);
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var isAdmin = User.IsInRole(Roles.Admin);
+        await notificationService.DeleteNotificationAsync(id, userId, isAdmin);
         return NoContent();
     }
 

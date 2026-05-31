@@ -12,10 +12,16 @@ public class WorkerDbContext(DbContextOptions<WorkerDbContext> options) : DbCont
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<User>()
-            .Ignore(u => u.Orders);
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Ignore(u => u.Orders);
+            entity.Property(u => u.Role).HasConversion<string>();
+        });
 
-        modelBuilder.Entity<Notification>()
-            .Ignore(n => n.User);
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.Ignore(n => n.User);
+            entity.Property(n => n.Type).HasConversion<string>();
+        });
     }
 }

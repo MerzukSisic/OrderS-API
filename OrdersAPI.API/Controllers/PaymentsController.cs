@@ -14,7 +14,10 @@ public class PaymentsController(
     IProcurementService procurementService,
     ILogger<PaymentsController> logger) : ControllerBase
 {
+    // Fix 11: Generički endpoint koji prima Amount od klijenta ograničen na Admin.
+    // Za procurement koristite POST /api/Procurement/{id}/payment-intent koji Amount čita iz baze.
     [HttpPost("create-intent")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<PaymentIntentResponseDto>> CreatePaymentIntent(
         [FromBody] CreatePaymentIntentDto dto)
     {

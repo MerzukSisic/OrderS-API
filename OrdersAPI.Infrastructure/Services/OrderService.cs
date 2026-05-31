@@ -1,4 +1,5 @@
 using OrdersAPI.Domain.Exceptions;
+using OrdersAPI.Domain.StateMachine;
 ﻿using MassTransit;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +18,8 @@ public class OrderService(
     ApplicationDbContext context,
     IAccompanimentService accompanimentService,
     IPublishEndpoint publishEndpoint,
-    IHubContext<OrderHub> hubContext, 
+    IHubContext<OrderHub> hubContext,
+    INotificationService notificationService,
     ILogger<OrderService> logger)
     : IOrderService
 {
@@ -45,14 +47,28 @@ public class OrderService(
                 var table = await context.CafeTables.FindAsync(dto.TableId.Value);
                 if (table == null)
                     throw new NotFoundException($"Table with ID {dto.TableId} not found");
+
+                // Fix 10: Backend provjera zauzetosti stola
+                if (dto.Type == "DineIn")
+                {
+                    var hasActiveOrder = await context.Orders.AnyAsync(o =>
+                        o.TableId == dto.TableId &&
+                        o.Status != OrderStatus.Completed &&
+                        o.Status != OrderStatus.Cancelled);
+                    if (hasActiveOrder)
+                        throw new BusinessException($"Table {table.TableNumber} already has an active order. Complete or cancel it before creating a new one.");
+                }
             }
+
+            if (!Enum.TryParse<OrderType>(dto.Type, ignoreCase: true, out var orderType))
+                throw new BusinessException($"Invalid order type '{dto.Type}'. Valid values: {string.Join(", ", Enum.GetNames<OrderType>())}");
 
             var order = new Order
             {
                 Id = Guid.NewGuid(),
                 WaiterId = waiterId,
                 TableId = dto.TableId,
-                Type = Enum.Parse<OrderType>(dto.Type),
+                Type = orderType,
                 IsPartnerOrder = dto.IsPartnerOrder,
                 Notes = dto.Notes,
                 Status = OrderStatus.Pending,
@@ -159,13 +175,13 @@ public class OrderService(
                 foreach (var ingredient in product.ProductIngredients)
                 {
                     var requiredQty = ingredient.Quantity * itemDto.Quantity;
-                    ingredient.StoreProduct.CurrentStock -= (int)requiredQty;
+                    ingredient.StoreProduct.CurrentStock -= requiredQty;
 
                     context.InventoryLogs.Add(new InventoryLog
                     {
                         Id = Guid.NewGuid(),
                         StoreProductId = ingredient.StoreProductId,
-                        QuantityChange = -(int)requiredQty,
+                        QuantityChange = -requiredQty,
                         Type = InventoryLogType.Sale,
                         Reason = $"Order {order.Id}",
                         CreatedAt = DateTime.UtcNow
@@ -209,16 +225,20 @@ public class OrderService(
 
             await context.SaveChangesAsync();
 
-            // ✅ Pošalji SignalR notifikacije koristeći sačuvane podatke
+            // Fix 6: CommitAsync MORA biti prije SignalR i RabbitMQ slanja
+            await transaction.CommitAsync();
+
+            // ✅ Pošalji SignalR notifikacije NAKON uspješnog commit-a
             foreach (var notification in signalRNotifications)
             {
                 var notificationData = new
                 {
                     OrderItemId = notification.orderItemId,
                     OrderId = order.Id,
+                    OrderNumber = order.OrderNumber,
                     ProductName = notification.productName,
                     Quantity = notification.quantity,
-                    TableNumber = tableInfo?.TableNumber,
+                    TableNumber = tableInfo != null && int.TryParse(tableInfo.TableNumber, out var tn) ? (int?)tn : null,
                     WaiterName = waiter?.FullName,
                     OrderType = order.Type.ToString(),
                     IsPartnerOrder = order.IsPartnerOrder,
@@ -238,11 +258,9 @@ public class OrderService(
                 }
             }
 
-            await transaction.CommitAsync();
-
             // ✅ LOGIRAJ KOJE RAČUNE TREBA GENERISATI ZA OVU NARUDŽBU
-            var hasKitchenItems = order.Items.Any(i => i.Product.Location == PreparationLocation.Kitchen);
-            var hasBarItems = order.Items.Any(i => i.Product.Location == PreparationLocation.Bar);
+            var hasKitchenItems = signalRNotifications.Any(n => n.location == PreparationLocation.Kitchen);
+            var hasBarItems = signalRNotifications.Any(n => n.location == PreparationLocation.Bar);
 
             var receiptTypes = new List<string>();
             if (hasKitchenItems) receiptTypes.Add("Kitchen");
@@ -250,21 +268,32 @@ public class OrderService(
             receiptTypes.Add("Customer"); // UVIJEK
 
             logger.LogInformation(
-                "📄 Order {OrderId} receipts available: {ReceiptTypes}", 
+                "📄 Order {OrderId} receipts available: {ReceiptTypes}",
                 order.Id, string.Join(", ", receiptTypes));
-            
-            // Publish RabbitMQ event
+
+            // Fix 2: Publish RabbitMQ event SA SVIM POTREBNIM POLJIMA koja consumer koristi
+            var itemDataByItemId = signalRNotifications.ToDictionary(n => n.orderItemId, n => n);
             await publishEndpoint.Publish(new OrderCreatedEvent
             {
                 OrderId = order.Id,
+                OrderNumber = order.OrderNumber,
+                TableNumber = tableInfo != null && int.TryParse(tableInfo.TableNumber, out var tn2) ? (int?)tn2 : null,
                 WaiterId = order.WaiterId,
+                WaiterName = waiter?.FullName ?? string.Empty,
                 TotalAmount = order.TotalAmount,
+                OrderType = order.Type.ToString(),
                 CreatedAt = order.CreatedAt,
-                Items = order.Items.Select(i => new OrderItemEvent
+                Items = order.Items.Select(i =>
                 {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity,
-                    Price = i.UnitPrice
+                    itemDataByItemId.TryGetValue(i.Id, out var data);
+                    return new OrderItemEvent
+                    {
+                        ProductId = i.ProductId,
+                        ProductName = data.productName ?? string.Empty,
+                        Quantity = i.Quantity,
+                        Price = i.UnitPrice,
+                        PreparationLocation = data.location.ToString()
+                    };
                 }).ToList()
             });
 
@@ -419,6 +448,9 @@ public class OrderService(
         if (order == null)
             throw new NotFoundException($"Order with ID {id} not found");
 
+        // Fix 9: State machine validacija tranzicije statusa
+        OrderStateMachine.ValidateTransition(order.Status, status);
+
         order.Status = status;
         order.UpdatedAt = DateTime.UtcNow;
 
@@ -468,7 +500,20 @@ public class OrderService(
         }
 
         await context.SaveChangesAsync();
-        
+
+        // Fix 20: In-app notifikacija waiteru za promjenu statusa
+        if (status == OrderStatus.Ready || status == OrderStatus.Completed || status == OrderStatus.Cancelled)
+        {
+            var waiterNotifTitle = status switch
+            {
+                OrderStatus.Ready => $"Order #{order.OrderNumber} is Ready",
+                OrderStatus.Completed => $"Order #{order.OrderNumber} Completed",
+                OrderStatus.Cancelled => $"Order #{order.OrderNumber} Cancelled",
+                _ => $"Order #{order.OrderNumber} status changed"
+            };
+            await notificationService.CreateSystemNotificationAsync(order.WaiterId, waiterNotifTitle, $"Status: {status}", "Info");
+        }
+
         logger.LogInformation("Order {OrderId} status updated to {Status}", id, status);
     }
 
@@ -535,15 +580,46 @@ public class OrderService(
             throw new NotFoundException($"Order item with ID {orderItemId} not found");
 
         var previousStatus = orderItem.Status;
+
+        // Fix 9: State machine validacija tranzicije stavke
+        OrderStateMachine.ValidateItemTransition(previousStatus, status);
+
         orderItem.Status = status;
 
         var order = orderItem.Order;
 
-        // Subtract cancelled item from order total (only once, if not already cancelled)
+        // Fix 5: Kada se stavka otkazuje - isto kao u CancelOrderAsync, vraćamo stock
         if (status == OrderItemStatus.Cancelled && previousStatus != OrderItemStatus.Cancelled)
         {
             order.TotalAmount = Math.Max(0, order.TotalAmount - orderItem.Subtotal);
             order.UpdatedAt = DateTime.UtcNow;
+
+            // Restore product stock i ingredient stock (isto što radi CancelOrderAsync po stavci)
+            var product = await context.Products
+                .Include(p => p.ProductIngredients)
+                    .ThenInclude(pi => pi.StoreProduct)
+                .FirstOrDefaultAsync(p => p.Id == orderItem.ProductId);
+
+            if (product != null)
+            {
+                product.Stock += orderItem.Quantity;
+
+                foreach (var ingredient in product.ProductIngredients)
+                {
+                    var restoredQty = ingredient.Quantity * orderItem.Quantity;
+                    ingredient.StoreProduct.CurrentStock += restoredQty;
+
+                    context.InventoryLogs.Add(new InventoryLog
+                    {
+                        Id = Guid.NewGuid(),
+                        StoreProductId = ingredient.StoreProductId,
+                        QuantityChange = restoredQty,
+                        Type = InventoryLogType.Adjustment,
+                        Reason = $"Order item {orderItemId} cancelled",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
         }
 
         // ✅ UPDATE ORDER STATUS BASED ON ALL ITEMS
@@ -630,13 +706,13 @@ public class OrderService(
                 foreach (var ingredient in item.Product.ProductIngredients)
                 {
                     var restoredQty = ingredient.Quantity * item.Quantity;
-                    ingredient.StoreProduct.CurrentStock += (int)restoredQty;
+                    ingredient.StoreProduct.CurrentStock += restoredQty;
 
                     context.InventoryLogs.Add(new InventoryLog
                     {
                         Id = Guid.NewGuid(),
                         StoreProductId = ingredient.StoreProductId,
-                        QuantityChange = (int)restoredQty,
+                        QuantityChange = restoredQty,
                         Type = InventoryLogType.Adjustment,
                         Reason = $"Order {orderId} cancelled: {reason}",
                         CreatedAt = DateTime.UtcNow
@@ -666,6 +742,13 @@ public class OrderService(
         }
 
         await context.SaveChangesAsync();
+
+        // Fix 20: In-app notifikacija waiteru pri otkazivanju
+        await notificationService.CreateSystemNotificationAsync(
+            order.WaiterId,
+            $"Order #{order.OrderNumber} Cancelled",
+            $"Reason: {reason}",
+            "Warning");
 
         logger.LogInformation("Order {OrderId} cancelled. Reason: {Reason}", orderId, reason);
     }
@@ -779,7 +862,7 @@ public class OrderService(
         foreach (var ingredient in product.ProductIngredients)
         {
             var requiredQty = ingredient.Quantity * dto.Quantity;
-            ingredient.StoreProduct.CurrentStock -= (int)requiredQty;
+            ingredient.StoreProduct.CurrentStock -= requiredQty;
         }
 
         // Update order total

@@ -44,7 +44,10 @@ public class ProcurementController(
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] string status)
     {
-        var procurementStatus = Enum.Parse<ProcurementStatus>(status);
+        // Fix 18: Sigurno parsiranje enum-a
+        if (!Enum.TryParse<ProcurementStatus>(status, ignoreCase: true, out var procurementStatus))
+            return BadRequest($"Invalid status '{status}'. Valid values: {string.Join(", ", Enum.GetNames<ProcurementStatus>())}");
+
         await procurementService.UpdateProcurementStatusAsync(id, procurementStatus);
         return NoContent();
     }

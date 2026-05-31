@@ -56,7 +56,8 @@ public class ProductsController(IProductService productService) : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        var preparationLocation = Enum.Parse<PreparationLocation>(location);
+        if (!Enum.TryParse<PreparationLocation>(location, ignoreCase: true, out var preparationLocation))
+            return BadRequest($"Invalid location '{location}'. Valid values: {string.Join(", ", Enum.GetNames<PreparationLocation>())}");
         var result = await productService.GetProductsByLocationAsync(preparationLocation, isAvailable, page, pageSize);
         Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
         Response.Headers["X-Page"] = result.Page.ToString();

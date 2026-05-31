@@ -15,6 +15,10 @@ public static class DbInitializer
         EnsureTokenTablesExist(context);
         EnsureSoftDeleteColumnsExist(context);
         EnsureOrderArchiveColumnsExist(context);
+        EnsureOrderNumberColumnExists(context);
+        EnsureDecimalInventoryColumnsExist(context);
+        EnsureStatusOptionsTableExists(context);
+        SeedStatusOptions(context);
 
         // Proveri da li već postoje podaci
         if (context.Users.Any())
@@ -272,5 +276,121 @@ public static class DbInitializer
             BEGIN
                 ALTER TABLE Orders ADD ArchivedAt DATETIME2 NULL;
             END");
+    }
+
+    private static void EnsureOrderNumberColumnExists(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('Orders', 'OrderNumber') IS NULL
+            BEGIN
+                ALTER TABLE Orders ADD OrderNumber INT NOT NULL IDENTITY(1,1);
+                CREATE UNIQUE INDEX IX_Orders_OrderNumber ON Orders(OrderNumber);
+            END");
+    }
+
+    private static void EnsureDecimalInventoryColumnsExist(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        // StoreProducts.CurrentStock: int -> decimal(18,4)
+        context.Database.ExecuteSqlRaw(@"
+            IF EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'StoreProducts' AND COLUMN_NAME = 'CurrentStock' AND DATA_TYPE = 'int'
+            )
+            BEGIN
+                ALTER TABLE StoreProducts ALTER COLUMN CurrentStock DECIMAL(18,4) NOT NULL;
+            END");
+
+        // StoreProducts.MinimumStock: int -> decimal(18,4)
+        context.Database.ExecuteSqlRaw(@"
+            IF EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'StoreProducts' AND COLUMN_NAME = 'MinimumStock' AND DATA_TYPE = 'int'
+            )
+            BEGIN
+                ALTER TABLE StoreProducts ALTER COLUMN MinimumStock DECIMAL(18,4) NOT NULL;
+            END");
+
+        // InventoryLogs.QuantityChange: int -> decimal(18,4)
+        context.Database.ExecuteSqlRaw(@"
+            IF EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'InventoryLogs' AND COLUMN_NAME = 'QuantityChange' AND DATA_TYPE = 'int'
+            )
+            BEGIN
+                ALTER TABLE InventoryLogs ALTER COLUMN QuantityChange DECIMAL(18,4) NOT NULL;
+            END");
+    }
+
+    private static void EnsureStatusOptionsTableExists(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'StatusOptions')
+            BEGIN
+                CREATE TABLE StatusOptions (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Category NVARCHAR(50) NOT NULL,
+                    Name NVARCHAR(50) NOT NULL,
+                    DisplayName NVARCHAR(100) NOT NULL,
+                    Description NVARCHAR(500) NULL,
+                    SortOrder INT NOT NULL DEFAULT 0,
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    CONSTRAINT UQ_StatusOptions_Category_Name UNIQUE (Category, Name)
+                );
+            END");
+    }
+
+    private static void SeedStatusOptions(ApplicationDbContext context)
+    {
+        if (context.StatusOptions.Any())
+            return;
+
+        var options = new List<StatusOption>
+        {
+            // Order statuses
+            new() { Category = "OrderStatus", Name = "Pending",   DisplayName = "Pending",   Description = "Order received, waiting to be prepared", SortOrder = 1 },
+            new() { Category = "OrderStatus", Name = "Preparing", DisplayName = "Preparing", Description = "Order is currently being prepared",       SortOrder = 2 },
+            new() { Category = "OrderStatus", Name = "Ready",     DisplayName = "Ready",     Description = "Order is ready for serving",             SortOrder = 3 },
+            new() { Category = "OrderStatus", Name = "Completed", DisplayName = "Completed", Description = "Order has been served and completed",     SortOrder = 4 },
+            new() { Category = "OrderStatus", Name = "Cancelled", DisplayName = "Cancelled", Description = "Order has been cancelled",               SortOrder = 5 },
+
+            // OrderItem statuses
+            new() { Category = "OrderItemStatus", Name = "Pending",   DisplayName = "Pending",   Description = "Item waiting to be prepared", SortOrder = 1 },
+            new() { Category = "OrderItemStatus", Name = "Preparing", DisplayName = "Preparing", Description = "Item is being prepared",      SortOrder = 2 },
+            new() { Category = "OrderItemStatus", Name = "Ready",     DisplayName = "Ready",     Description = "Item is ready",               SortOrder = 3 },
+            new() { Category = "OrderItemStatus", Name = "Completed", DisplayName = "Completed", Description = "Item delivered",              SortOrder = 4 },
+            new() { Category = "OrderItemStatus", Name = "Cancelled", DisplayName = "Cancelled", Description = "Item cancelled",              SortOrder = 5 },
+
+            // Procurement statuses
+            new() { Category = "ProcurementStatus", Name = "Pending",   DisplayName = "Pending",   Description = "Procurement order created, awaiting payment", SortOrder = 1 },
+            new() { Category = "ProcurementStatus", Name = "Paid",      DisplayName = "Paid",      Description = "Payment confirmed via Stripe",                 SortOrder = 2 },
+            new() { Category = "ProcurementStatus", Name = "Ordered",   DisplayName = "Ordered",   Description = "Order placed with supplier",                   SortOrder = 3 },
+            new() { Category = "ProcurementStatus", Name = "Received",  DisplayName = "Received",  Description = "Goods received and inventory updated",         SortOrder = 4 },
+            new() { Category = "ProcurementStatus", Name = "Cancelled", DisplayName = "Cancelled", Description = "Procurement order cancelled",                  SortOrder = 5 },
+
+            // Table statuses
+            new() { Category = "TableStatus", Name = "Available", DisplayName = "Available", Description = "Table is free",     SortOrder = 1 },
+            new() { Category = "TableStatus", Name = "Occupied",  DisplayName = "Occupied",  Description = "Table has guests",  SortOrder = 2 },
+            new() { Category = "TableStatus", Name = "Reserved",  DisplayName = "Reserved",  Description = "Table is reserved", SortOrder = 3 },
+
+            // Inventory log types
+            new() { Category = "InventoryLogType", Name = "Sale",        DisplayName = "Sale",        Description = "Stock deducted due to sale",         SortOrder = 1 },
+            new() { Category = "InventoryLogType", Name = "Restock",     DisplayName = "Restock",     Description = "Stock added via procurement",        SortOrder = 2 },
+            new() { Category = "InventoryLogType", Name = "Adjustment",  DisplayName = "Adjustment",  Description = "Manual stock adjustment",            SortOrder = 3 },
+            new() { Category = "InventoryLogType", Name = "Damage",      DisplayName = "Damage",      Description = "Stock written off due to damage",    SortOrder = 4 },
+            new() { Category = "InventoryLogType", Name = "Addition",    DisplayName = "Addition",    Description = "Stock manually added",               SortOrder = 5 },
+            new() { Category = "InventoryLogType", Name = "Subtraction", DisplayName = "Subtraction", Description = "Stock manually subtracted",          SortOrder = 6 },
+        };
+
+        context.StatusOptions.AddRange(options);
+        context.SaveChanges();
     }
 }

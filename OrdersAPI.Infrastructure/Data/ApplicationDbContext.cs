@@ -24,6 +24,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<OrderItemAccompaniment> OrderItemAccompaniments => Set<OrderItemAccompaniment>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<StatusOption> StatusOptions => Set<StatusOption>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +61,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.OrderNumber).ValueGeneratedOnAdd();
             entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.Type).HasConversion<string>();
             entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
@@ -112,6 +114,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.PurchasePrice).HasPrecision(18, 2);
+            entity.Property(e => e.CurrentStock).HasPrecision(18, 4);
+            entity.Property(e => e.MinimumStock).HasPrecision(18, 4);
 
             entity.HasOne(e => e.Store)
                 .WithMany(e => e.StoreProducts)
@@ -178,6 +182,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Type).HasConversion<string>();
+            entity.Property(e => e.QuantityChange).HasPrecision(18, 4);
 
             entity.HasOne(e => e.StoreProduct)
                 .WithMany()
@@ -260,6 +265,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // StatusOption - Fix 19: reference tablice za statuse
+        modelBuilder.Entity<StatusOption>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Name).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.DisplayName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.HasIndex(e => new { e.Category, e.Name }).IsUnique();
         });
     }
 }

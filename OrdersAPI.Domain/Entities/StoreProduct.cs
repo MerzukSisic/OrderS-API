@@ -7,8 +7,8 @@ public class StoreProduct
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public decimal PurchasePrice { get; set; }
-    public int CurrentStock { get; set; }
-    public int MinimumStock { get; set; } = 10;
+    public decimal CurrentStock { get; set; }
+    public decimal MinimumStock { get; set; } = 10;
     public string Unit { get; set; } = "pcs";
     public DateTime LastRestocked { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

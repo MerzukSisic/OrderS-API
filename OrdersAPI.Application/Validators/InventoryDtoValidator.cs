@@ -70,7 +70,7 @@ public class AdjustInventoryDtoValidator : AbstractValidator<AdjustInventoryDto>
 
         RuleFor(x => x.Type)
             .NotEmpty().WithMessage("Tip je obavezan")
-            .Must(x => x == "Sale" || x == "Restock" || x == "Adjustment" || x == "Damage")
-            .WithMessage("Tip mora biti: Sale, Restock, Adjustment ili Damage");
+            .Must(x => x == "Sale" || x == "Restock" || x == "Adjustment" || x == "Damage" || x == "Addition" || x == "Subtraction")
+            .WithMessage("Tip mora biti: Sale, Restock, Adjustment, Damage, Addition ili Subtraction");
     }
 }

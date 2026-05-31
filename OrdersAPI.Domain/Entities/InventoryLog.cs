@@ -6,7 +6,7 @@ public class InventoryLog
 {
     public Guid Id { get; set; }
     public Guid StoreProductId { get; set; }
-    public int QuantityChange { get; set; }
+    public decimal QuantityChange { get; set; }
     public InventoryLogType Type { get; set; }
     public string? Reason { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

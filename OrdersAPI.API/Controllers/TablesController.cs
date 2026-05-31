@@ -48,7 +48,8 @@ public class TablesController(ITableService tableService) : ControllerBase
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateTableStatus(Guid id, [FromQuery] string status)
     {
-        var tableStatus = Enum.Parse<TableStatus>(status);
+        if (!Enum.TryParse<TableStatus>(status, ignoreCase: true, out var tableStatus))
+            return BadRequest($"Invalid table status '{status}'. Valid values: {string.Join(", ", Enum.GetNames<TableStatus>())}");
         await tableService.UpdateTableStatusAsync(id, tableStatus);
         return NoContent();
     }

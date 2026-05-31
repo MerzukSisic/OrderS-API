@@ -1,6 +1,8 @@
 using OrdersAPI.Domain.Exceptions;
+using OrdersAPI.Domain.StateMachine;
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
@@ -16,17 +18,20 @@ public class ProcurementService : IProcurementService
     private readonly ILogger<ProcurementService> _logger;
     private readonly IStripeService _stripeService;
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
 
     public ProcurementService(
         ApplicationDbContext context,
         ILogger<ProcurementService> logger,
         IStripeService stripeService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         _context = context;
         _logger = logger;
         _stripeService = stripeService;
         _configuration = configuration;
+        _environment = environment;
     }
 
     public async Task<PagedResult<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null, int page = 1, int pageSize = 50)
@@ -210,19 +215,42 @@ public class ProcurementService : IProcurementService
         if (order == null)
             throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
 
-        // Create payment intent via Stripe
+        if (order.Status != ProcurementStatus.Pending)
+            throw new BusinessException($"Cannot create payment for order with status '{order.Status}'. Order must be in Pending status.");
+
+        // Fix 12: Provjeri postoji li već aktivan payment intent za ovu narudžbu
+        if (!string.IsNullOrEmpty(order.StripePaymentIntentId))
+        {
+            try
+            {
+                var existingIntent = await _stripeService.GetPaymentIntentAsync(order.StripePaymentIntentId);
+                if (existingIntent.Status is "requires_payment_method" or "requires_confirmation" or "requires_action")
+                {
+                    _logger.LogInformation("Returning existing payment intent {IntentId} for order {OrderId}", order.StripePaymentIntentId, order.Id);
+                    return existingIntent;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not retrieve existing intent {IntentId}, creating new one", order.StripePaymentIntentId);
+            }
+        }
+
+        // Amount se čita iz baze - klijent ne može manipulirati iznosom
         var createDto = new CreatePaymentIntentDto
         {
             OrderId = order.Id,
             Amount = order.TotalAmount,
-            Currency = "bam", // Will be converted to EUR by StripeService
+            Currency = "bam",
             TableNumber = $"Procurement-{order.Supplier}"
         };
 
         var paymentIntent = await _stripeService.CreatePaymentIntentAsync(createDto);
+        order.StripePaymentIntentId = paymentIntent.PaymentIntentId;
+        await _context.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Stripe Payment Intent created for procurement order {OrderId}: {PaymentIntentId}, Amount: {Amount} {Currency}", 
+            "Stripe Payment Intent created for procurement order {OrderId}: {PaymentIntentId}, Amount: {Amount} {Currency}",
             order.Id, paymentIntent.PaymentIntentId, paymentIntent.Amount, paymentIntent.Currency);
 
         return paymentIntent;
@@ -238,16 +266,18 @@ public class ProcurementService : IProcurementService
         if (order == null)
             throw new BusinessException("Procurement order not found");
 
-        // Config-gated bypass: Stripe:BypassVerification=true skips real Stripe verification.
-        // Default is false — always verify with Stripe.
-        var bypassVerification =
-            bool.TryParse(_configuration["Stripe:BypassVerification"], out var parsedBypassVerification) &&
-            parsedBypassVerification;
+        // Fix 13: Bypass SAMO u Development okruženju
+        var bypassEnabled =
+            bool.TryParse(_configuration["Stripe:BypassVerification"], out var parsedBypass) && parsedBypass;
+        var bypassVerification = bypassEnabled && _environment.IsDevelopment();
+
+        if (bypassEnabled && !_environment.IsDevelopment())
+            _logger.LogWarning("Stripe:BypassVerification=true je ignorisan jer okruženje nije Development. Koristimo pravu Stripe provjeru.");
 
         if (bypassVerification)
         {
             _logger.LogWarning(
-                "Stripe:BypassVerification=true — auto-approving payment {PaymentIntentId} for order {OrderId}",
+                "[DEV ONLY] Stripe:BypassVerification=true — auto-approving payment {PaymentIntentId} for order {OrderId}",
                 paymentIntentId, procurementOrderId);
             order.Status = ProcurementStatus.Paid;
             order.StripePaymentIntentId = paymentIntentId;
@@ -277,11 +307,17 @@ public class ProcurementService : IProcurementService
         if (order == null)
             throw new NotFoundException($"Procurement order with ID {id} not found");
 
-        order.Status = status;
+        // Fix 15: Kritični statusi ne smiju biti postavljeni direktno - koristite dedicirane endpoint-e
+        if (status == ProcurementStatus.Paid)
+            throw new BusinessException("Status 'Paid' ne može biti postavljen direktno. Koristite payment endpoint (/payment-intent + /confirm-payment) koji verificira Stripe plaćanje.");
 
         if (status == ProcurementStatus.Received)
-            order.DeliveryDate = DateTime.UtcNow;
+            throw new BusinessException("Status 'Received' ne može biti postavljen direktno. Koristite /receive endpoint koji provjerava i ažurira inventar.");
 
+        // Fix 9: State machine validacija tranzicije statusa
+        ProcurementStateMachine.ValidateTransition(order.Status, status);
+
+        order.Status = status;
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Procurement order {OrderId} status updated to {Status}", id, status);
@@ -304,6 +340,8 @@ public class ProcurementService : IProcurementService
         // External source stores already had stock deducted at order creation
         bool sourceIsInternal = order.SourceStore != null && !order.SourceStore.IsExternal;
 
+        var inventoryErrors = new List<string>();
+
         foreach (var receivedItem in dto.Items)
         {
             var orderItem = order.Items.FirstOrDefault(i => i.Id == receivedItem.ItemId);
@@ -315,9 +353,16 @@ public class ProcurementService : IProcurementService
                     $"Received quantity ({receivedItem.ReceivedQuantity}) cannot exceed ordered quantity ({orderItem.Quantity})"
                 );
 
-            // Increase destination store stock (match by name)
+            // Fix 14: Match po StoreProductId direktno u destination store-u (ne po nazivu)
+            // Tražimo isti store product po imenu SAMO ako ne postoji direktna veza
+            // Idealno: ProcurementOrderItem treba DestinationStoreProductId - za sada koristimo robustno matchovanje
             var destinationProduct = await _context.StoreProducts
-                .FirstOrDefaultAsync(p => p.StoreId == order.StoreId && p.Name == orderItem.StoreProduct.Name);
+                .FirstOrDefaultAsync(p => p.StoreId == order.StoreId && p.Id == orderItem.StoreProductId);
+
+            // Fallback: ako source i destination store su različiti, matchujemo po imenu
+            if (destinationProduct == null)
+                destinationProduct = await _context.StoreProducts
+                    .FirstOrDefaultAsync(p => p.StoreId == order.StoreId && p.Name == orderItem.StoreProduct.Name);
 
             if (destinationProduct != null)
             {
@@ -336,8 +381,10 @@ public class ProcurementService : IProcurementService
             }
             else
             {
-                _logger.LogWarning("No matching product '{Name}' found in destination store {StoreId} for procurement {OrderId}",
-                    orderItem.StoreProduct.Name, order.StoreId, procurementOrderId);
+                // Fix 14: Ako inventory ne može biti ažuriran, bilježimo grešku i NE postavljamo Received
+                var errorMsg = $"No matching product '{orderItem.StoreProduct.Name}' found in destination store {order.StoreId}";
+                inventoryErrors.Add(errorMsg);
+                _logger.LogWarning("Procurement receive error for order {OrderId}: {Error}", procurementOrderId, errorMsg);
             }
 
             // Decrease source store stock only for internal stores (external already deducted at creation)
@@ -360,7 +407,11 @@ public class ProcurementService : IProcurementService
                 receivedItem.ReceivedQuantity, orderItem.Quantity, orderItem.StoreProduct.Name, procurementOrderId);
         }
 
-        // Update order status
+        // Fix 14: Ne postavljamo Received ako inventory nije stvarno ažuriran
+        if (inventoryErrors.Count > 0)
+            throw new BusinessException($"Cannot mark order as Received - inventory update failed for: {string.Join("; ", inventoryErrors)}");
+
+        // Update order status - SAMO ako je inventory stvarno ažuriran
         order.Status = ProcurementStatus.Received;
         order.DeliveryDate = DateTime.UtcNow;
         if (!string.IsNullOrEmpty(dto.Notes))

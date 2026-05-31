@@ -15,6 +15,7 @@ namespace OrdersAPI.API.Controllers;
 public class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<ActionResult<OrderDto>> CreateOrder([FromBody] CreateOrderDto dto)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -81,7 +82,10 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100)
     {
-        var preparationLocation = Enum.Parse<PreparationLocation>(location);
+        // Fix 18: Sigurno parsiranje enum-a
+        if (!Enum.TryParse<PreparationLocation>(location, ignoreCase: true, out var preparationLocation))
+            return BadRequest($"Invalid location '{location}'. Valid values: {string.Join(", ", Enum.GetNames<PreparationLocation>())}");
+
         var result = await orderService.GetOrderItemsByLocationAsync(preparationLocation, status, page, pageSize);
         Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
         Response.Headers["X-Page"] = result.Page.ToString();
@@ -91,14 +95,19 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPut("{id}/status")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateOrderStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
     {
-        var status = Enum.Parse<OrderStatus>(dto.Status);
+        // Fix 18: Sigurno parsiranje enum-a
+        if (!Enum.TryParse<OrderStatus>(dto.Status, ignoreCase: true, out var status))
+            return BadRequest($"Invalid status '{dto.Status}'. Valid values: {string.Join(", ", Enum.GetNames<OrderStatus>())}");
+
         await orderService.UpdateOrderStatusAsync(id, status);
         return NoContent();
     }
 
     [HttpPut("{id}/complete")]
+    [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<IActionResult> CompleteOrder(Guid id)
     {
         await orderService.CompleteOrderAsync(id);
@@ -106,6 +115,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPut("{id}/cancel")]
+    [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<IActionResult> CancelOrder(Guid id, [FromBody] CancelOrderDto dto)
     {
         await orderService.CancelOrderAsync(id, dto.Reason);
@@ -113,6 +123,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPut("{id}/archive")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> ArchiveOrder(Guid id)
     {
         await orderService.ArchiveOrderAsync(id);
@@ -120,6 +131,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DeleteOrder(Guid id)
     {
         await orderService.ArchiveOrderAsync(id);
@@ -127,6 +139,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     }
 
     [HttpPost("{id}/items")]
+    [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<ActionResult<OrderItemDto>> AddItemToOrder(Guid id, [FromBody] CreateOrderItemDto dto)
     {
         var item = await orderService.AddItemToOrderAsync(id, dto);
@@ -137,7 +150,10 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [Authorize(Roles = Roles.AllStaff)]
     public async Task<IActionResult> UpdateOrderItemStatus(Guid itemId, [FromBody] UpdateOrderItemStatusDto dto)
     {
-        var status = Enum.Parse<OrderItemStatus>(dto.Status);
+        // Fix 18: Sigurno parsiranje enum-a
+        if (!Enum.TryParse<OrderItemStatus>(dto.Status, ignoreCase: true, out var status))
+            return BadRequest($"Invalid status '{dto.Status}'. Valid values: {string.Join(", ", Enum.GetNames<OrderItemStatus>())}");
+
         await orderService.UpdateOrderItemStatusAsync(itemId, status);
         return NoContent();
     }

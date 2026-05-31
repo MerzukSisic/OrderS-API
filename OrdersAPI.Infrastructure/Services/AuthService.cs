@@ -67,6 +67,7 @@ public class AuthService(
             throw new ConflictException("Email already exists");
         }
 
+        // Fix 16: Novi korisnici idu u inactive/pending stanje dok admin ne odobri
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -75,27 +76,15 @@ public class AuthService(
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = UserRole.Waiter,
             PhoneNumber = dto.PhoneNumber,
-            IsActive = true,
+            IsActive = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
-
-        var accessToken = GenerateJwtToken(user);
-        var refreshToken = GenerateSecureToken();
 
         using var transaction = await context.Database.BeginTransactionAsync();
         try
         {
             context.Users.Add(user);
-            context.RefreshTokens.Add(new RefreshToken
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenHash = HashToken(refreshToken),
-                ExpiresAt = DateTime.UtcNow.AddDays(30),
-                IsRevoked = false,
-                CreatedAt = DateTime.UtcNow
-            });
             await context.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -105,7 +94,7 @@ public class AuthService(
             throw;
         }
 
-        logger.LogInformation("User {Email} registered successfully", user.Email);
+        logger.LogInformation("User {Email} registered (inactive, pending admin approval)", user.Email);
 
         return new AuthResponseDto
         {
@@ -113,8 +102,8 @@ public class AuthService(
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
-            AccessToken = accessToken,
-            RefreshToken = refreshToken
+            AccessToken = string.Empty,
+            RefreshToken = string.Empty
         };
     }
 
@@ -135,7 +124,13 @@ public class AuthService(
                 ValidAudience = configuration["Jwt:Audience"],
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
-            }, out _);
+            }, out var validatedToken);
+
+            // Fix 17: Provjeri je li token blacklistovan (npr. nakon logout-a)
+            var jti = ((JwtSecurityToken)validatedToken).Claims
+                .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
+            if (jti != null && tokenBlacklist.IsRevoked(jti))
+                return Task.FromResult(false);
 
             return Task.FromResult(true);
         }
@@ -250,9 +245,19 @@ public class AuthService(
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
+        // Fix 17: Revoke svih aktivnih refresh tokena (kao u ResetPasswordAsync)
+        var activeTokens = await context.RefreshTokens
+            .Where(t => t.UserId == userId && !t.IsRevoked)
+            .ToListAsync();
+        foreach (var token in activeTokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = DateTime.UtcNow;
+        }
+
         await context.SaveChangesAsync();
 
-        logger.LogInformation("Password changed successfully for user {UserId}", userId);
+        logger.LogInformation("Password changed successfully for user {UserId}, {Count} refresh token(s) revoked", userId, activeTokens.Count);
     }
 
     public async Task<UserDto> GetCurrentUserAsync(Guid userId)

@@ -79,31 +79,60 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
         };
     }
 
-    public async Task MarkAsReadAsync(Guid notificationId)
+    public async Task MarkAsReadAsync(Guid notificationId, Guid actorUserId, bool isAdmin = false)
     {
         var notification = await context.Notifications.FindAsync(notificationId);
         if (notification == null)
             throw new NotFoundException($"Notification with ID {notificationId} not found");
+
+        // Fix 8: Ownership provjera - samo vlasnik ili admin mogu mijenjati notifikaciju
+        if (!isAdmin && notification.UserId != actorUserId)
+            throw new UnauthorizedAccessException("You can only mark your own notifications as read");
 
         if (!notification.IsRead)
         {
             notification.IsRead = true;
             await context.SaveChangesAsync();
 
-            logger.LogInformation("Notification {NotificationId} marked as read", notificationId);
+            logger.LogInformation("Notification {NotificationId} marked as read by user {UserId}", notificationId, actorUserId);
         }
     }
 
-    public async Task DeleteNotificationAsync(Guid notificationId)
+    public async Task DeleteNotificationAsync(Guid notificationId, Guid actorUserId, bool isAdmin = false)
     {
         var notification = await context.Notifications.FindAsync(notificationId);
         if (notification == null)
             throw new NotFoundException($"Notification with ID {notificationId} not found");
 
+        // Fix 8: Ownership provjera - samo vlasnik ili admin mogu brisati notifikaciju
+        if (!isAdmin && notification.UserId != actorUserId)
+            throw new UnauthorizedAccessException("You can only delete your own notifications");
+
         context.Notifications.Remove(notification);
         await context.SaveChangesAsync();
 
-        logger.LogInformation("Notification {NotificationId} deleted", notificationId);
+        logger.LogInformation("Notification {NotificationId} deleted by user {UserId}", notificationId, actorUserId);
+    }
+
+    public async Task CreateSystemNotificationAsync(Guid userId, string title, string message, string type)
+    {
+        var userExists = await context.Users.AnyAsync(u => u.Id == userId);
+        if (!userExists) return;
+
+        if (!Enum.TryParse<NotificationType>(type, ignoreCase: true, out var notificationType))
+            notificationType = NotificationType.Info;
+
+        context.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Title = title,
+            Message = message,
+            Type = notificationType,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
     }
 
     public async Task MarkAllAsReadAsync(Guid userId)
