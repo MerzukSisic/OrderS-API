@@ -5,6 +5,7 @@ public enum ProcurementStatus
     Pending,
     Paid,
     Ordered,
+    PartiallyReceived,
     Received,
     Cancelled
 }

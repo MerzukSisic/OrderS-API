@@ -146,6 +146,9 @@ public class ProductService(
         if (missingIngredients.Any())
             throw new NotFoundException($"Store products not found: {string.Join(", ", missingIngredients)}");
 
+        if (!Enum.TryParse<PreparationLocation>(dto.PreparationLocation, ignoreCase: true, out var preparationLocation))
+            throw new BusinessException($"Invalid preparation location '{dto.PreparationLocation}'. Valid values: {string.Join(", ", Enum.GetNames<PreparationLocation>())}");
+
         var product = new Product
         {
             Id = Guid.NewGuid(),
@@ -154,7 +157,7 @@ public class ProductService(
             Price = dto.Price,
             CategoryId = dto.CategoryId,
             ImageUrl = dto.ImageUrl,
-            Location = Enum.Parse<PreparationLocation>(dto.PreparationLocation),
+            Location = preparationLocation,
             PreparationTimeMinutes = dto.PreparationTimeMinutes,
             Stock = dto.Stock,
             IsAvailable = true,
@@ -209,8 +212,13 @@ public class ProductService(
     if (dto.CategoryId.HasValue) product.CategoryId = dto.CategoryId.Value;
     if (dto.ImageUrl != null) product.ImageUrl = dto.ImageUrl;
     if (dto.IsAvailable.HasValue) product.IsAvailable = dto.IsAvailable.Value;
-    if (dto.PreparationLocation != null) 
-        product.Location = Enum.Parse<PreparationLocation>(dto.PreparationLocation);
+    if (dto.PreparationLocation != null)
+    {
+        if (!Enum.TryParse<PreparationLocation>(dto.PreparationLocation, ignoreCase: true, out var preparationLocation))
+            throw new BusinessException($"Invalid preparation location '{dto.PreparationLocation}'. Valid values: {string.Join(", ", Enum.GetNames<PreparationLocation>())}");
+
+        product.Location = preparationLocation;
+    }
     if (dto.PreparationTimeMinutes.HasValue) 
         product.PreparationTimeMinutes = dto.PreparationTimeMinutes.Value;
     if (dto.Stock.HasValue) product.Stock = dto.Stock.Value;
@@ -256,12 +264,15 @@ public class ProductService(
         // Add new accompaniment groups
         foreach (var groupDto in dto.AccompanimentGroups)
         {
+            if (!Enum.TryParse<SelectionType>(groupDto.SelectionType, ignoreCase: true, out var selectionType))
+                throw new BusinessException($"Invalid selection type '{groupDto.SelectionType}'. Valid values: {string.Join(", ", Enum.GetNames<SelectionType>())}");
+
             var group = new AccompanimentGroup
             {
                 Id = Guid.NewGuid(),
                 ProductId = id,
                 Name = groupDto.Name,
-                SelectionType = Enum.Parse<SelectionType>(groupDto.SelectionType),
+                SelectionType = selectionType,
                 IsRequired = groupDto.IsRequired,
                 MinSelections = groupDto.MinSelections,
                 MaxSelections = groupDto.MaxSelections,

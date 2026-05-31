@@ -11,10 +11,12 @@ namespace OrdersAPI.Infrastructure.Services;
 
 public class TableService(ApplicationDbContext context, ILogger<TableService> logger) : ITableService
 {
-    public async Task<PagedResult<TableDto>> GetAllTablesAsync(int page = 1, int pageSize = 100)
+    public async Task<PagedResult<TableDto>> GetAllTablesAsync(int page = 1, int pageSize = 100, TableStatus? status = null)
     {
         var clampedPageSize = Math.Min(pageSize, 100);
         var query = context.CafeTables.AsNoTracking();
+        if (status.HasValue)
+            query = query.Where(t => t.Status == status.Value);
         var totalCount = await query.CountAsync();
         var tables = await query
             .OrderBy(t => t.TableNumber)
@@ -113,7 +115,13 @@ public class TableService(ApplicationDbContext context, ILogger<TableService> lo
 
         if (dto.TableNumber != null) table.TableNumber = dto.TableNumber;
         if (dto.Capacity.HasValue) table.Capacity = dto.Capacity.Value;
-        if (dto.Status != null) table.Status = Enum.Parse<TableStatus>(dto.Status);
+        if (dto.Status != null)
+        {
+            if (!Enum.TryParse<TableStatus>(dto.Status, ignoreCase: true, out var tableStatus))
+                throw new BusinessException($"Invalid table status '{dto.Status}'. Valid values: {string.Join(", ", Enum.GetNames<TableStatus>())}");
+
+            table.Status = tableStatus;
+        }
         if (dto.Location != null) table.Location = dto.Location;
 
         await context.SaveChangesAsync();

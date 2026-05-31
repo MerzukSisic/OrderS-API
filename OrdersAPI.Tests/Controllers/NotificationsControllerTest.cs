@@ -279,7 +279,7 @@ public class NotificationsControllerTests
     {
         // Arrange
         _notificationServiceMock
-            .Setup(x => x.MarkAsReadAsync(It.IsAny<Guid>()))
+            .Setup(x => x.MarkAsReadAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -288,7 +288,7 @@ public class NotificationsControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _notificationServiceMock.Verify(x => x.MarkAsReadAsync(_testNotificationId), Times.Once);
+        _notificationServiceMock.Verify(x => x.MarkAsReadAsync(_testNotificationId, _testUserId, true), Times.Once);
     }
 
     [Fact]
@@ -296,14 +296,14 @@ public class NotificationsControllerTests
     {
         // Arrange
         _notificationServiceMock
-            .Setup(x => x.MarkAsReadAsync(It.IsAny<Guid>()))
+            .Setup(x => x.MarkAsReadAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>()))
             .ThrowsAsync(new KeyNotFoundException($"Notification with ID {_testNotificationId} not found"));
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _controller.MarkAsRead(_testNotificationId));
 
-        _notificationServiceMock.Verify(x => x.MarkAsReadAsync(_testNotificationId), Times.Once);
+        _notificationServiceMock.Verify(x => x.MarkAsReadAsync(_testNotificationId, _testUserId, true), Times.Once);
     }
 
     #endregion
@@ -336,7 +336,7 @@ public class NotificationsControllerTests
     {
         // Arrange
         _notificationServiceMock
-            .Setup(x => x.DeleteNotificationAsync(It.IsAny<Guid>()))
+            .Setup(x => x.DeleteNotificationAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -345,7 +345,7 @@ public class NotificationsControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _notificationServiceMock.Verify(x => x.DeleteNotificationAsync(_testNotificationId), Times.Once);
+        _notificationServiceMock.Verify(x => x.DeleteNotificationAsync(_testNotificationId, _testUserId, true), Times.Once);
     }
 
     [Fact]
@@ -353,14 +353,14 @@ public class NotificationsControllerTests
     {
         // Arrange
         _notificationServiceMock
-            .Setup(x => x.DeleteNotificationAsync(It.IsAny<Guid>()))
+            .Setup(x => x.DeleteNotificationAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>()))
             .ThrowsAsync(new KeyNotFoundException($"Notification with ID {_testNotificationId} not found"));
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _controller.DeleteNotification(_testNotificationId));
 
-        _notificationServiceMock.Verify(x => x.DeleteNotificationAsync(_testNotificationId), Times.Once);
+        _notificationServiceMock.Verify(x => x.DeleteNotificationAsync(_testNotificationId, _testUserId, true), Times.Once);
     }
 
     #endregion

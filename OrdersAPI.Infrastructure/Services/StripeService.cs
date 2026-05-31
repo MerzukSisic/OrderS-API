@@ -206,11 +206,11 @@ public class StripeService : IStripeService
         decimal amount, 
         string currency)
     {
-        var (checkoutUrl, _) = await CreateCheckoutSessionWithIntentAsync(procurementOrderId, amount, currency);
+        var (checkoutUrl, _, _) = await CreateCheckoutSessionWithIntentAsync(procurementOrderId, amount, currency);
         return checkoutUrl;
     }
 
-    public async Task<(string checkoutUrl, string paymentIntentId)> CreateCheckoutSessionWithIntentAsync(
+    public async Task<(string CheckoutUrl, string CheckoutSessionId, string PaymentIntentId)> CreateCheckoutSessionWithIntentAsync(
         string procurementOrderId,
         decimal amount,
         string currency)
@@ -267,7 +267,7 @@ public class StripeService : IStripeService
             _logger.LogInformation("✅ Checkout session created: {SessionId} for order {OrderId}, PI: {PaymentIntentId}",
                 session.Id, procurementOrderId, session.PaymentIntentId);
 
-            return (session.Url, session.PaymentIntentId ?? string.Empty);
+            return (session.Url, session.Id, session.PaymentIntentId ?? string.Empty);
         }
         catch (StripeException ex)
         {

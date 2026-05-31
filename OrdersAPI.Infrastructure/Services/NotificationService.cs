@@ -50,13 +50,16 @@ public class NotificationService(ApplicationDbContext context, ILogger<Notificat
         if (!userExists)
             throw new NotFoundException($"User with ID {userId} not found");
 
+        if (!Enum.TryParse<NotificationType>(type, ignoreCase: true, out var notificationType))
+            throw new BusinessException($"Invalid notification type '{type}'. Valid values: {string.Join(", ", Enum.GetNames<NotificationType>())}");
+
         var notification = new Notification
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             Title = title,
             Message = message,
-            Type = Enum.Parse<NotificationType>(type),
+            Type = notificationType,
             IsRead = false,
             CreatedAt = DateTime.UtcNow
         };

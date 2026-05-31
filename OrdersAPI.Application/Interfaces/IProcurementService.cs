@@ -16,5 +16,6 @@ public interface IProcurementService
     Task<string> HandleCheckoutSuccessAsync(Guid procurementOrderId, string sessionId);
     Task HandleWebhookCheckoutCompletedAsync(WebhookEventDto eventDto);
     Task HandleWebhookPaymentSucceededAsync(WebhookEventDto eventDto);
+    Task HandleWebhookPaymentFailedAsync(WebhookEventDto eventDto);
     Task HandleWebhookChargeRefundedAsync(WebhookEventDto eventDto);
 }

@@ -438,7 +438,10 @@ public class OrderService(
         return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
-    public async Task UpdateOrderStatusAsync(Guid id, OrderStatus status)
+    public Task UpdateOrderStatusAsync(Guid id, OrderStatus status) =>
+        UpdateOrderStatusAsync(id, status, Guid.Empty, UserRole.Admin);
+
+    public async Task UpdateOrderStatusAsync(Guid id, OrderStatus status, Guid actorUserId, UserRole actorRole)
     {
         var order = await context.Orders
             .Include(o => o.Items)
@@ -447,6 +450,8 @@ public class OrderService(
             
         if (order == null)
             throw new NotFoundException($"Order with ID {id} not found");
+
+        EnsureCanManageOrder(order, actorUserId, actorRole, adminOnly: status != OrderStatus.Completed);
 
         // Fix 9: State machine validacija tranzicije statusa
         OrderStateMachine.ValidateTransition(order.Status, status);
@@ -569,15 +574,21 @@ public class OrderService(
         return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
-    public async Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status)
+    public Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status) =>
+        UpdateOrderItemStatusAsync(orderItemId, status, Guid.Empty, UserRole.Admin);
+
+    public async Task UpdateOrderItemStatusAsync(Guid orderItemId, OrderItemStatus status, Guid actorUserId, UserRole actorRole)
     {
         var orderItem = await context.OrderItems
+            .Include(oi => oi.Product)
             .Include(oi => oi.Order)
                 .ThenInclude(o => o.Items)
             .FirstOrDefaultAsync(oi => oi.Id == orderItemId);
             
         if (orderItem == null)
             throw new NotFoundException($"Order item with ID {orderItemId} not found");
+
+        EnsureCanManageOrderItem(orderItem, actorUserId, actorRole);
 
         var previousStatus = orderItem.Status;
 
@@ -663,6 +674,12 @@ public class OrderService(
 
         await context.SaveChangesAsync();
 
+        await notificationService.CreateSystemNotificationAsync(
+            order.WaiterId,
+            $"Order item updated",
+            $"{orderItem.Product.Name} is now {status}. Order status: {order.Status}.",
+            "Info");
+
         // ✅ Notify all clients about status change (both item and order)
         await hubContext.Clients.All.SendAsync("OrderItemStatusChanged", new
         {
@@ -677,7 +694,10 @@ public class OrderService(
         logger.LogInformation("Order {OrderId} status is now {Status}", order.Id, order.Status);
     }
 
-    public async Task CancelOrderAsync(Guid orderId, string reason)
+    public Task CancelOrderAsync(Guid orderId, string reason) =>
+        CancelOrderAsync(orderId, reason, Guid.Empty, UserRole.Admin);
+
+    public async Task CancelOrderAsync(Guid orderId, string reason, Guid actorUserId, UserRole actorRole)
     {
         var order = await context.Orders
             .Include(o => o.Items)
@@ -690,8 +710,13 @@ public class OrderService(
         if (order == null)
             throw new NotFoundException($"Order with ID {orderId} not found");
 
+        EnsureCanManageOrder(order, actorUserId, actorRole);
+
         if (order.Status == OrderStatus.Completed)
         {
+            if (actorRole != UserRole.Admin)
+                throw new UnauthorizedAccessException("Only Admin can archive a completed order");
+
             await ArchiveOrderAsync(orderId);
             return;
         }
@@ -774,7 +799,10 @@ public class OrderService(
         logger.LogInformation("Order {OrderId} archived", orderId);
     }
 
-    public async Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto)
+    public Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto) =>
+        AddItemToOrderAsync(orderId, dto, Guid.Empty, UserRole.Admin);
+
+    public async Task<OrderItemDto> AddItemToOrderAsync(Guid orderId, CreateOrderItemDto dto, Guid actorUserId, UserRole actorRole)
     {
         var order = await context.Orders
             .Include(o => o.Items)
@@ -784,6 +812,8 @@ public class OrderService(
 
         if (order == null)
             throw new NotFoundException($"Order with ID {orderId} not found");
+
+        EnsureCanManageOrder(order, actorUserId, actorRole);
 
         if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled)
             throw new BusinessException("Cannot add items to completed or cancelled order");
@@ -973,9 +1003,12 @@ public class OrderService(
         return new PagedResult<OrderDto> { Items = items, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
     }
 
-    public async Task CompleteOrderAsync(Guid orderId)
+    public Task CompleteOrderAsync(Guid orderId) =>
+        CompleteOrderAsync(orderId, Guid.Empty, UserRole.Admin);
+
+    public async Task CompleteOrderAsync(Guid orderId, Guid actorUserId, UserRole actorRole)
     {
-        await UpdateOrderStatusAsync(orderId, OrderStatus.Completed);
+        await UpdateOrderStatusAsync(orderId, OrderStatus.Completed, actorUserId, actorRole);
     }
 
     public async Task<PagedResult<OrderItemDto>> GetOrderItemsByLocationAsync(PreparationLocation location, OrderItemStatus? status = null, int page = 1, int pageSize = 100)
@@ -1026,5 +1059,43 @@ public class OrderService(
         }).ToList();
 
         return new PagedResult<OrderItemDto> { Items = dtoItems, TotalCount = totalCount, Page = page, PageSize = clampedPageSize };
+    }
+
+    private static void EnsureCanManageOrder(Order order, Guid actorUserId, UserRole actorRole, bool adminOnly = false)
+    {
+        if (actorRole == UserRole.Admin)
+            return;
+
+        if (adminOnly)
+            throw new UnauthorizedAccessException("Only Admin can perform this order operation");
+
+        if (actorRole == UserRole.Manager)
+            return;
+
+        var active = order.Status != OrderStatus.Completed && order.Status != OrderStatus.Cancelled;
+        if (actorRole == UserRole.Waiter && active && order.WaiterId == actorUserId)
+            return;
+
+        throw new UnauthorizedAccessException("You are not allowed to modify this order");
+    }
+
+    private static void EnsureCanManageOrderItem(OrderItem orderItem, Guid actorUserId, UserRole actorRole)
+    {
+        if (actorRole is UserRole.Admin or UserRole.Manager)
+            return;
+
+        var order = orderItem.Order;
+        var active = order.Status != OrderStatus.Completed && order.Status != OrderStatus.Cancelled;
+
+        if (actorRole == UserRole.Waiter && active && order.WaiterId == actorUserId)
+            return;
+
+        if (actorRole == UserRole.Kitchen && orderItem.Product.Location == PreparationLocation.Kitchen)
+            return;
+
+        if (actorRole == UserRole.Bartender && orderItem.Product.Location == PreparationLocation.Bar)
+            return;
+
+        throw new UnauthorizedAccessException("You are not allowed to modify this order item");
     }
 }

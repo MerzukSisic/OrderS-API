@@ -14,7 +14,8 @@
       "Bash(xargs cat *)",
       "Bash(grep -rn \"Email\\\\b\\\\|Smtp\\\\b\" OrdersAPI.Worker/appsettings.json OrdersAPI.API/appsettings.json)",
       "Bash(grep -rn \"Email\\\\b\\\\|Smtp\\\\b\" docker-compose.yml)",
-      "Bash(grep -rn \"Email\\\\b\\\\|Smtp\\\\b\\\\|smtp\\\\b\" OrdersAPI.API/Program.cs)"
+      "Bash(grep -rn \"Email\\\\b\\\\|Smtp\\\\b\\\\|smtp\\\\b\" OrdersAPI.API/Program.cs)",
+      "Bash(grep \"\\\\.dart$\")"
     ]
   }
 }

@@ -2,7 +2,9 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using Moq;
 using OrdersAPI.API.Controllers;
 using OrdersAPI.Application.DTOs;
@@ -36,7 +38,8 @@ public class PaymentsControllerTests
         _dbContext = new ApplicationDbContext(options);
 
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        _controller = new PaymentsController(_stripeServiceMock.Object, _procurementServiceMock.Object, logger);
+        var environment = Mock.Of<IWebHostEnvironment>(e => e.EnvironmentName == Environments.Development);
+        _controller = new PaymentsController(_stripeServiceMock.Object, _procurementServiceMock.Object, logger, environment);
 
         _testOrderId = Guid.NewGuid();
         _testPaymentIntentId = "pi_3AbC123TestPaymentIntent";
@@ -396,7 +399,8 @@ public class PaymentsControllerTests
         var stripeMock = new Mock<IStripeService>();
         var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
+        var environment = Mock.Of<IWebHostEnvironment>(e => e.EnvironmentName == Environments.Development);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger, environment);
 
         var paymentIntentId = "pi_test_regression_456";
         var webhookJson = "{\"type\":\"payment_intent.succeeded\"}";
@@ -455,7 +459,8 @@ public class PaymentsControllerTests
         var stripeMock = new Mock<IStripeService>();
         var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
+        var environment = Mock.Of<IWebHostEnvironment>(e => e.EnvironmentName == Environments.Development);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger, environment);
 
         var webhookJson = "{\"type\":\"payment_intent.succeeded\"}";
         var signature = "t=123,v1=sig";
@@ -521,7 +526,8 @@ public class PaymentsControllerTests
         var stripeMock = new Mock<IStripeService>();
         var procurementServiceMock = new Mock<IProcurementService>();
         var logger = Mock.Of<ILogger<PaymentsController>>();
-        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger);
+        var environment = Mock.Of<IWebHostEnvironment>(e => e.EnvironmentName == Environments.Development);
+        var controller = new PaymentsController(stripeMock.Object, procurementServiceMock.Object, logger, environment);
 
         var webhookJson = "{\"type\":\"checkout.session.completed\"}";
         var signature = "t=123,v1=sig";

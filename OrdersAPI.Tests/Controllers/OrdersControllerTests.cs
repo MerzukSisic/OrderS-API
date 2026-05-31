@@ -467,7 +467,7 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing))
+            .Setup(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing, _testUserId, UserRole.Waiter))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -476,7 +476,7 @@ public class OrdersControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _orderServiceMock.Verify(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing), Times.Once);
+        _orderServiceMock.Verify(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     [Fact]
@@ -486,14 +486,14 @@ public class OrdersControllerTests
         var updateDto = new UpdateOrderStatusDto { Status = "Preparing" };
 
         _orderServiceMock
-            .Setup(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing))
+            .Setup(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing, _testUserId, UserRole.Waiter))
             .ThrowsAsync(new KeyNotFoundException($"Order with ID {_testOrderId} not found"));
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _controller.UpdateOrderStatus(_testOrderId, updateDto));
 
-        _orderServiceMock.Verify(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing), Times.Once);
+        _orderServiceMock.Verify(x => x.UpdateOrderStatusAsync(_testOrderId, OrderStatus.Preparing, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     #endregion
@@ -505,7 +505,7 @@ public class OrdersControllerTests
     {
         // Arrange
         _orderServiceMock
-            .Setup(x => x.CompleteOrderAsync(_testOrderId))
+            .Setup(x => x.CompleteOrderAsync(_testOrderId, _testUserId, UserRole.Waiter))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -514,7 +514,7 @@ public class OrdersControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _orderServiceMock.Verify(x => x.CompleteOrderAsync(_testOrderId), Times.Once);
+        _orderServiceMock.Verify(x => x.CompleteOrderAsync(_testOrderId, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     [Fact]
@@ -522,14 +522,14 @@ public class OrdersControllerTests
     {
         // Arrange
         _orderServiceMock
-            .Setup(x => x.CompleteOrderAsync(_testOrderId))
+            .Setup(x => x.CompleteOrderAsync(_testOrderId, _testUserId, UserRole.Waiter))
             .ThrowsAsync(new KeyNotFoundException($"Order with ID {_testOrderId} not found"));
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _controller.CompleteOrder(_testOrderId));
 
-        _orderServiceMock.Verify(x => x.CompleteOrderAsync(_testOrderId), Times.Once);
+        _orderServiceMock.Verify(x => x.CompleteOrderAsync(_testOrderId, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     #endregion
@@ -546,7 +546,7 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason))
+            .Setup(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason, _testUserId, UserRole.Waiter))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -555,7 +555,7 @@ public class OrdersControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _orderServiceMock.Verify(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason), Times.Once);
+        _orderServiceMock.Verify(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     [Fact]
@@ -565,14 +565,14 @@ public class OrdersControllerTests
         var cancelDto = new CancelOrderDto { Reason = "Test" };
 
         _orderServiceMock
-            .Setup(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason))
+            .Setup(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason, _testUserId, UserRole.Waiter))
             .ThrowsAsync(new InvalidOperationException("Cannot cancel completed order"));
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _controller.CancelOrder(_testOrderId, cancelDto));
 
-        _orderServiceMock.Verify(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason), Times.Once);
+        _orderServiceMock.Verify(x => x.CancelOrderAsync(_testOrderId, cancelDto.Reason, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     #endregion
@@ -606,7 +606,7 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.AddItemToOrderAsync(_testOrderId, It.IsAny<CreateOrderItemDto>()))
+            .Setup(x => x.AddItemToOrderAsync(_testOrderId, It.IsAny<CreateOrderItemDto>(), _testUserId, UserRole.Waiter))
             .ReturnsAsync(expectedItem);
 
         // Act
@@ -622,7 +622,7 @@ public class OrdersControllerTests
         item.Quantity.Should().Be(2);
         item.Notes.Should().Be("Extra spicy");
 
-        _orderServiceMock.Verify(x => x.AddItemToOrderAsync(_testOrderId, It.IsAny<CreateOrderItemDto>()), Times.Once);
+        _orderServiceMock.Verify(x => x.AddItemToOrderAsync(_testOrderId, It.IsAny<CreateOrderItemDto>(), _testUserId, UserRole.Waiter), Times.Once);
     }
 
     #endregion
@@ -639,7 +639,7 @@ public class OrdersControllerTests
         };
 
         _orderServiceMock
-            .Setup(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Preparing))
+            .Setup(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Preparing, _testUserId, UserRole.Waiter))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -648,7 +648,7 @@ public class OrdersControllerTests
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        _orderServiceMock.Verify(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Preparing), Times.Once);
+        _orderServiceMock.Verify(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Preparing, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     [Fact]
@@ -658,14 +658,14 @@ public class OrdersControllerTests
         var updateDto = new UpdateOrderItemStatusDto { Status = "Ready" };
 
         _orderServiceMock
-            .Setup(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Ready))
+            .Setup(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Ready, _testUserId, UserRole.Waiter))
             .ThrowsAsync(new KeyNotFoundException($"Order item with ID {_testOrderItemId} not found"));
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _controller.UpdateOrderItemStatus(_testOrderItemId, updateDto));
 
-        _orderServiceMock.Verify(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Ready), Times.Once);
+        _orderServiceMock.Verify(x => x.UpdateOrderItemStatusAsync(_testOrderItemId, OrderItemStatus.Ready, _testUserId, UserRole.Waiter), Times.Once);
     }
 
     #endregion

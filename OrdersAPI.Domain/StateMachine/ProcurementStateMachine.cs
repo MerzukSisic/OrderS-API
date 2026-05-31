@@ -9,7 +9,8 @@ public static class ProcurementStateMachine
     {
         [ProcurementStatus.Pending]   = [ProcurementStatus.Ordered, ProcurementStatus.Cancelled],
         [ProcurementStatus.Paid]      = [ProcurementStatus.Ordered, ProcurementStatus.Cancelled],
-        [ProcurementStatus.Ordered]   = [ProcurementStatus.Received, ProcurementStatus.Cancelled],
+        [ProcurementStatus.Ordered]   = [ProcurementStatus.PartiallyReceived, ProcurementStatus.Received, ProcurementStatus.Cancelled],
+        [ProcurementStatus.PartiallyReceived] = [ProcurementStatus.Received, ProcurementStatus.Cancelled],
         [ProcurementStatus.Received]  = [],
         [ProcurementStatus.Cancelled] = [],
     };

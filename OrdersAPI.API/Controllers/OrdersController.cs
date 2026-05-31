@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using OrdersAPI.Application.DTOs;
 using OrdersAPI.Application.Interfaces;
 using OrdersAPI.Domain.Constants;
-using OrdersAPI.Domain.Entities;
 using OrdersAPI.Domain.Enums;
 
 namespace OrdersAPI.API.Controllers;
@@ -102,7 +101,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         if (!Enum.TryParse<OrderStatus>(dto.Status, ignoreCase: true, out var status))
             return BadRequest($"Invalid status '{dto.Status}'. Valid values: {string.Join(", ", Enum.GetNames<OrderStatus>())}");
 
-        await orderService.UpdateOrderStatusAsync(id, status);
+        await orderService.UpdateOrderStatusAsync(id, status, CurrentUserId(), CurrentUserRole());
         return NoContent();
     }
 
@@ -110,7 +109,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<IActionResult> CompleteOrder(Guid id)
     {
-        await orderService.CompleteOrderAsync(id);
+        await orderService.CompleteOrderAsync(id, CurrentUserId(), CurrentUserRole());
         return NoContent();
     }
 
@@ -118,7 +117,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<IActionResult> CancelOrder(Guid id, [FromBody] CancelOrderDto dto)
     {
-        await orderService.CancelOrderAsync(id, dto.Reason);
+        await orderService.CancelOrderAsync(id, dto.Reason, CurrentUserId(), CurrentUserRole());
         return NoContent();
     }
 
@@ -142,7 +141,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [Authorize(Roles = Roles.AdminManagerOrWaiter)]
     public async Task<ActionResult<OrderItemDto>> AddItemToOrder(Guid id, [FromBody] CreateOrderItemDto dto)
     {
-        var item = await orderService.AddItemToOrderAsync(id, dto);
+        var item = await orderService.AddItemToOrderAsync(id, dto, CurrentUserId(), CurrentUserRole());
         return Ok(item);
     }
 
@@ -154,7 +153,19 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         if (!Enum.TryParse<OrderItemStatus>(dto.Status, ignoreCase: true, out var status))
             return BadRequest($"Invalid status '{dto.Status}'. Valid values: {string.Join(", ", Enum.GetNames<OrderItemStatus>())}");
 
-        await orderService.UpdateOrderItemStatusAsync(itemId, status);
+        await orderService.UpdateOrderItemStatusAsync(itemId, status, CurrentUserId(), CurrentUserRole());
         return NoContent();
+    }
+
+    private Guid CurrentUserId() =>
+        Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private UserRole CurrentUserRole()
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (role == null || !Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsed))
+            throw new UnauthorizedAccessException("Invalid or missing user role");
+
+        return parsed;
     }
 }

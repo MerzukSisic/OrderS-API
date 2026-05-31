@@ -6,6 +6,7 @@ public class ProcurementOrderItem
     public Guid ProcurementOrderId { get; set; }
     public Guid StoreProductId { get; set; }
     public int Quantity { get; set; }
+    public int ReceivedQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public decimal Subtotal { get; set; }
 

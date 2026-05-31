@@ -12,15 +12,19 @@ namespace OrdersAPI.API.Controllers;
 public class PaymentsController(
     IStripeService stripeService,
     IProcurementService procurementService,
-    ILogger<PaymentsController> logger) : ControllerBase
+    ILogger<PaymentsController> logger,
+    IWebHostEnvironment environment) : ControllerBase
 {
-    // Fix 11: Generički endpoint koji prima Amount od klijenta ograničen na Admin.
+    // Fix 11: Generički endpoint koji prima Amount od klijenta dostupan je samo u Development.
     // Za procurement koristite POST /api/Procurement/{id}/payment-intent koji Amount čita iz baze.
     [HttpPost("create-intent")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<PaymentIntentResponseDto>> CreatePaymentIntent(
         [FromBody] CreatePaymentIntentDto dto)
     {
+        if (!environment.IsDevelopment())
+            return StatusCode(StatusCodes.Status410Gone, "Generic payment intents are disabled outside Development. Use a business-specific payment endpoint.");
+
         var response = await stripeService.CreatePaymentIntentAsync(dto);
         return Ok(response);
     }
@@ -92,6 +96,7 @@ public class PaymentsController(
 
                 case "payment_intent.payment_failed":
                     logger.LogWarning("Payment FAILED for PI: {PaymentIntentId}", eventDto.PaymentIntentId);
+                    await procurementService.HandleWebhookPaymentFailedAsync(eventDto);
                     break;
 
                 case "charge.refunded":

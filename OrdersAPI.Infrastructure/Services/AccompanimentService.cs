@@ -47,12 +47,15 @@ public class AccompanimentService(
             throw new NotFoundException($"Product with ID {dto.ProductId} not found");
         }
 
+        if (!Enum.TryParse<SelectionType>(dto.SelectionType, ignoreCase: true, out var selectionType))
+            throw new BusinessException($"Invalid selection type '{dto.SelectionType}'. Valid values: {string.Join(", ", Enum.GetNames<SelectionType>())}");
+
         var group = new AccompanimentGroup
         {
             Id = Guid.NewGuid(),
             Name = dto.Name,
             ProductId = dto.ProductId,
-            SelectionType = Enum.Parse<SelectionType>(dto.SelectionType),
+            SelectionType = selectionType,
             IsRequired = dto.IsRequired,
             MinSelections = dto.MinSelections,
             MaxSelections = dto.MaxSelections,
@@ -95,8 +98,11 @@ public class AccompanimentService(
             throw new NotFoundException($"AccompanimentGroup with ID {id} not found");
         }
 
+        if (!Enum.TryParse<SelectionType>(dto.SelectionType, ignoreCase: true, out var selectionType))
+            throw new BusinessException($"Invalid selection type '{dto.SelectionType}'. Valid values: {string.Join(", ", Enum.GetNames<SelectionType>())}");
+
         group.Name = dto.Name;
-        group.SelectionType = Enum.Parse<SelectionType>(dto.SelectionType);
+        group.SelectionType = selectionType;
         group.IsRequired = dto.IsRequired;
         group.MinSelections = dto.MinSelections;
         group.MaxSelections = dto.MaxSelections;

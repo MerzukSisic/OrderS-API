@@ -11,6 +11,7 @@ public class ProcurementOrder
     public decimal TotalAmount { get; set; }
     public ProcurementStatus Status { get; set; } = ProcurementStatus.Pending;
     public string? StripePaymentIntentId { get; set; }
+    public string? StripeCheckoutSessionId { get; set; }
     public string? Notes { get; set; }
     public DateTime OrderDate { get; set; } = DateTime.UtcNow;
     public DateTime? DeliveryDate { get; set; }

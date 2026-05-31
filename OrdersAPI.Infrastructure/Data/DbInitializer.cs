@@ -17,6 +17,7 @@ public static class DbInitializer
         EnsureOrderArchiveColumnsExist(context);
         EnsureOrderNumberColumnExists(context);
         EnsureDecimalInventoryColumnsExist(context);
+        EnsureProcurementPaymentAndReceiveColumnsExist(context);
         EnsureStatusOptionsTableExists(context);
         SeedStatusOptions(context);
 
@@ -348,6 +349,24 @@ public static class DbInitializer
             END");
     }
 
+    private static void EnsureProcurementPaymentAndReceiveColumnsExist(ApplicationDbContext context)
+    {
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return;
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('ProcurementOrders', 'StripeCheckoutSessionId') IS NULL
+            BEGIN
+                ALTER TABLE ProcurementOrders ADD StripeCheckoutSessionId NVARCHAR(200) NULL;
+            END");
+
+        context.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH('ProcurementOrderItems', 'ReceivedQuantity') IS NULL
+            BEGIN
+                ALTER TABLE ProcurementOrderItems ADD ReceivedQuantity INT NOT NULL CONSTRAINT DF_ProcurementOrderItems_ReceivedQuantity DEFAULT 0;
+            END");
+    }
+
     private static void SeedStatusOptions(ApplicationDbContext context)
     {
         if (context.StatusOptions.Any())
@@ -373,8 +392,9 @@ public static class DbInitializer
             new() { Category = "ProcurementStatus", Name = "Pending",   DisplayName = "Pending",   Description = "Procurement order created, awaiting payment", SortOrder = 1 },
             new() { Category = "ProcurementStatus", Name = "Paid",      DisplayName = "Paid",      Description = "Payment confirmed via Stripe",                 SortOrder = 2 },
             new() { Category = "ProcurementStatus", Name = "Ordered",   DisplayName = "Ordered",   Description = "Order placed with supplier",                   SortOrder = 3 },
-            new() { Category = "ProcurementStatus", Name = "Received",  DisplayName = "Received",  Description = "Goods received and inventory updated",         SortOrder = 4 },
-            new() { Category = "ProcurementStatus", Name = "Cancelled", DisplayName = "Cancelled", Description = "Procurement order cancelled",                  SortOrder = 5 },
+            new() { Category = "ProcurementStatus", Name = "PartiallyReceived", DisplayName = "Partially received", Description = "Some ordered goods were received", SortOrder = 4 },
+            new() { Category = "ProcurementStatus", Name = "Received",  DisplayName = "Received",  Description = "Goods received and inventory updated",         SortOrder = 5 },
+            new() { Category = "ProcurementStatus", Name = "Cancelled", DisplayName = "Cancelled", Description = "Procurement order cancelled",                  SortOrder = 6 },
 
             // Table statuses
             new() { Category = "TableStatus", Name = "Available", DisplayName = "Available", Description = "Table is free",     SortOrder = 1 },

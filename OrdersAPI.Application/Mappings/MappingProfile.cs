@@ -95,14 +95,14 @@ public class MappingProfile : Profile
             .ForMember(d => d.Accompaniments, o => o.MapFrom(s => s.Accompaniments.OrderBy(a => a.DisplayOrder)));
 
         CreateMap<CreateAccompanimentGroupDto, AccompanimentGroup>()
-            .ForMember(d => d.SelectionType, o => o.MapFrom(s => Enum.Parse<SelectionType>(s.SelectionType)))
+            .ForMember(d => d.SelectionType, o => o.MapFrom(s => ParseSelectionType(s.SelectionType)))
             .ForMember(d => d.Id, o => o.Ignore())
             .ForMember(d => d.CreatedAt, o => o.Ignore())
             .ForMember(d => d.Product, o => o.Ignore())
             .ForMember(d => d.Accompaniments, o => o.Ignore());
 
         CreateMap<UpdateAccompanimentGroupDto, AccompanimentGroup>()
-            .ForMember(d => d.SelectionType, o => o.MapFrom(s => Enum.Parse<SelectionType>(s.SelectionType)))
+            .ForMember(d => d.SelectionType, o => o.MapFrom(s => ParseSelectionType(s.SelectionType)))
             .ForMember(d => d.Id, o => o.Ignore())
             .ForMember(d => d.ProductId, o => o.Ignore())
             .ForMember(d => d.CreatedAt, o => o.Ignore())
@@ -129,5 +129,13 @@ public class MappingProfile : Profile
             .ForMember(d => d.AccompanimentId, o => o.MapFrom(s => s.AccompanimentId))
             .ForMember(d => d.Name, o => o.MapFrom(s => s.Accompaniment.Name))
             .ForMember(d => d.ExtraCharge, o => o.MapFrom(s => s.PriceAtOrder));
+    }
+
+    private static SelectionType ParseSelectionType(string value)
+    {
+        if (Enum.TryParse<SelectionType>(value, ignoreCase: true, out var selectionType))
+            return selectionType;
+
+        throw new ArgumentException($"Invalid selection type '{value}'. Valid values: {string.Join(", ", Enum.GetNames<SelectionType>())}");
     }
 }

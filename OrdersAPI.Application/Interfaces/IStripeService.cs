@@ -17,6 +17,7 @@ public interface IStripeService
     
     // Checkout Sessions (NEW)
     Task<string> CreateCheckoutSessionAsync(string procurementOrderId, decimal amount, string currency);
+    Task<(string CheckoutUrl, string CheckoutSessionId, string PaymentIntentId)> CreateCheckoutSessionWithIntentAsync(string procurementOrderId, decimal amount, string currency);
     Task<Session> GetCheckoutSessionAsync(string sessionId);
     
     // Webhooks

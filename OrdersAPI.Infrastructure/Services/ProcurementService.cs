@@ -19,19 +19,22 @@ public class ProcurementService : IProcurementService
     private readonly IStripeService _stripeService;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
+    private readonly INotificationService _notificationService;
 
     public ProcurementService(
         ApplicationDbContext context,
         ILogger<ProcurementService> logger,
         IStripeService stripeService,
         IConfiguration configuration,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        INotificationService notificationService)
     {
         _context = context;
         _logger = logger;
         _stripeService = stripeService;
         _configuration = configuration;
         _environment = environment;
+        _notificationService = notificationService;
     }
 
     public async Task<PagedResult<ProcurementOrderDto>> GetAllProcurementOrdersAsync(Guid? storeId = null, int page = 1, int pageSize = 50)
@@ -65,6 +68,7 @@ public class ProcurementService : IProcurementService
                 TotalAmount = p.TotalAmount,
                 Status = p.Status.ToString(),
                 StripePaymentIntentId = p.StripePaymentIntentId,
+                StripeCheckoutSessionId = p.StripeCheckoutSessionId,
                 Notes = p.Notes,
                 OrderDate = p.OrderDate,
                 DeliveryDate = p.DeliveryDate,
@@ -74,6 +78,7 @@ public class ProcurementService : IProcurementService
                     StoreProductId = i.StoreProductId,
                     StoreProductName = i.StoreProduct != null ? i.StoreProduct.Name : string.Empty,
                     Quantity = i.Quantity,
+                    ReceivedQuantity = i.ReceivedQuantity,
                     UnitCost = i.UnitCost,
                     Subtotal = i.Subtotal
                 }).ToList()
@@ -102,6 +107,7 @@ public class ProcurementService : IProcurementService
                 TotalAmount = p.TotalAmount,
                 Status = p.Status.ToString(),
                 StripePaymentIntentId = p.StripePaymentIntentId,
+                StripeCheckoutSessionId = p.StripeCheckoutSessionId,
                 Notes = p.Notes,
                 OrderDate = p.OrderDate,
                 DeliveryDate = p.DeliveryDate,
@@ -111,6 +117,7 @@ public class ProcurementService : IProcurementService
                     StoreProductId = i.StoreProductId,
                     StoreProductName = i.StoreProduct != null ? i.StoreProduct.Name : string.Empty,
                     Quantity = i.Quantity,
+                    ReceivedQuantity = i.ReceivedQuantity,
                     UnitCost = i.UnitCost,
                     Subtotal = i.Subtotal
                 }).ToList()
@@ -219,6 +226,9 @@ public class ProcurementService : IProcurementService
             throw new BusinessException($"Cannot create payment for order with status '{order.Status}'. Order must be in Pending status.");
 
         // Fix 12: Provjeri postoji li već aktivan payment intent za ovu narudžbu
+        if (!string.IsNullOrEmpty(order.StripeCheckoutSessionId))
+            throw new BusinessException("A checkout payment attempt already exists for this procurement order.");
+
         if (!string.IsNullOrEmpty(order.StripePaymentIntentId))
         {
             try
@@ -266,6 +276,14 @@ public class ProcurementService : IProcurementService
         if (order == null)
             throw new BusinessException("Procurement order not found");
 
+        if (order.Status != ProcurementStatus.Pending)
+            throw new BusinessException($"Cannot confirm payment for order with status '{order.Status}'.");
+
+        if (!string.IsNullOrEmpty(order.StripePaymentIntentId) &&
+            order.StripePaymentIntentId != paymentIntentId &&
+            !order.StripePaymentIntentId.StartsWith("checkout:", StringComparison.OrdinalIgnoreCase))
+            throw new BusinessException("Payment intent does not belong to this procurement order.");
+
         // Fix 13: Bypass SAMO u Development okruženju
         var bypassEnabled =
             bool.TryParse(_configuration["Stripe:BypassVerification"], out var parsedBypass) && parsedBypass;
@@ -282,6 +300,7 @@ public class ProcurementService : IProcurementService
             order.Status = ProcurementStatus.Paid;
             order.StripePaymentIntentId = paymentIntentId;
             await _context.SaveChangesAsync();
+            await NotifyAdminsAsync($"Procurement #{order.Id} Paid", "Payment was approved in Development bypass mode.", "Info");
             return;
         }
 
@@ -297,6 +316,7 @@ public class ProcurementService : IProcurementService
         order.Status = ProcurementStatus.Paid;
         order.StripePaymentIntentId = paymentIntentId;
         await _context.SaveChangesAsync();
+        await NotifyAdminsAsync($"Procurement #{order.Id} Paid", $"Stripe payment {paymentIntentId} was confirmed.", "Info");
 
         _logger.LogInformation("Payment confirmed for procurement order {OrderId}", procurementOrderId);
     }
@@ -319,6 +339,7 @@ public class ProcurementService : IProcurementService
 
         order.Status = status;
         await _context.SaveChangesAsync();
+        await NotifyAdminsAsync($"Procurement #{order.Id} Status Updated", $"Status changed to {status}.", "Info");
 
         _logger.LogInformation("Procurement order {OrderId} status updated to {Status}", id, status);
     }
@@ -334,8 +355,8 @@ public class ProcurementService : IProcurementService
         if (order == null)
             throw new NotFoundException($"Procurement order with ID {procurementOrderId} not found");
 
-        if (order.Status != ProcurementStatus.Paid)
-            throw new BusinessException("Order must be paid before receiving");
+        if (order.Status is not (ProcurementStatus.Paid or ProcurementStatus.Ordered or ProcurementStatus.PartiallyReceived))
+            throw new BusinessException("Order must be paid or already partially received before receiving");
 
         // External source stores already had stock deducted at order creation
         bool sourceIsInternal = order.SourceStore != null && !order.SourceStore.IsExternal;
@@ -348,9 +369,12 @@ public class ProcurementService : IProcurementService
             if (orderItem == null)
                 throw new NotFoundException($"Order item with ID {receivedItem.ItemId} not found");
 
-            if (receivedItem.ReceivedQuantity > orderItem.Quantity)
+            if (receivedItem.ReceivedQuantity <= 0)
+                throw new BusinessException("Received quantity must be greater than zero");
+
+            if (orderItem.ReceivedQuantity + receivedItem.ReceivedQuantity > orderItem.Quantity)
                 throw new BusinessException(
-                    $"Received quantity ({receivedItem.ReceivedQuantity}) cannot exceed ordered quantity ({orderItem.Quantity})"
+                    $"Received quantity ({orderItem.ReceivedQuantity + receivedItem.ReceivedQuantity}) cannot exceed ordered quantity ({orderItem.Quantity})"
                 );
 
             // Fix 14: Match po StoreProductId direktno u destination store-u (ne po nazivu)
@@ -368,6 +392,7 @@ public class ProcurementService : IProcurementService
             {
                 destinationProduct.CurrentStock += receivedItem.ReceivedQuantity;
                 destinationProduct.LastRestocked = DateTime.UtcNow;
+                orderItem.ReceivedQuantity += receivedItem.ReceivedQuantity;
 
                 _context.InventoryLogs.Add(new InventoryLog
                 {
@@ -412,14 +437,17 @@ public class ProcurementService : IProcurementService
             throw new BusinessException($"Cannot mark order as Received - inventory update failed for: {string.Join("; ", inventoryErrors)}");
 
         // Update order status - SAMO ako je inventory stvarno ažuriran
-        order.Status = ProcurementStatus.Received;
-        order.DeliveryDate = DateTime.UtcNow;
+        var fullyReceived = order.Items.All(i => i.ReceivedQuantity >= i.Quantity);
+        order.Status = fullyReceived ? ProcurementStatus.Received : ProcurementStatus.PartiallyReceived;
+        if (fullyReceived)
+            order.DeliveryDate = DateTime.UtcNow;
         if (!string.IsNullOrEmpty(dto.Notes))
             order.Notes = $"{order.Notes}\n[RECEIVED: {dto.Notes}]";
 
         await _context.SaveChangesAsync();
+        await NotifyAdminsAsync($"Procurement #{order.Id} {order.Status}", $"Received goods update saved. Status: {order.Status}.", "Info");
 
-        _logger.LogInformation("Procurement order {OrderId} fully received and inventory updated", procurementOrderId);
+        _logger.LogInformation("Procurement order {OrderId} received update saved. Status: {Status}", procurementOrderId, order.Status);
     }
 
     public async Task<string> CreateCheckoutSessionAsync(Guid procurementOrderId)
@@ -431,7 +459,19 @@ public class ProcurementService : IProcurementService
         if (order.Status != ProcurementStatus.Pending)
             throw new BusinessException("Order is not in pending status");
 
-        return await _stripeService.CreateCheckoutSessionAsync(procurementOrderId.ToString(), order.TotalAmount, "bam");
+        if (!string.IsNullOrEmpty(order.StripePaymentIntentId) || !string.IsNullOrEmpty(order.StripeCheckoutSessionId))
+            throw new BusinessException("A payment attempt already exists for this procurement order. Complete or cancel the existing attempt before creating a new one.");
+
+        var (checkoutUrl, checkoutSessionId, paymentIntentId) =
+            await _stripeService.CreateCheckoutSessionWithIntentAsync(procurementOrderId.ToString(), order.TotalAmount, "bam");
+
+        order.StripeCheckoutSessionId = checkoutSessionId;
+        if (!string.IsNullOrEmpty(paymentIntentId))
+            order.StripePaymentIntentId = paymentIntentId;
+
+        await _context.SaveChangesAsync();
+
+        return checkoutUrl;
     }
 
     public async Task<string> HandleCheckoutSuccessAsync(Guid procurementOrderId, string sessionId)
@@ -446,9 +486,14 @@ public class ProcurementService : IProcurementService
 
         if (order.Status == ProcurementStatus.Pending)
         {
+            if (!string.IsNullOrEmpty(order.StripeCheckoutSessionId) && order.StripeCheckoutSessionId != sessionId)
+                throw new BusinessException("Checkout session does not belong to this procurement order.");
+
             order.Status = ProcurementStatus.Paid;
             order.StripePaymentIntentId = session.PaymentIntentId;
+            order.StripeCheckoutSessionId = session.Id;
             await _context.SaveChangesAsync();
+            await NotifyAdminsAsync($"Procurement #{order.Id} Paid", $"Checkout session {sessionId} completed successfully.", "Info");
             _logger.LogInformation("Payment successful for procurement order {OrderId}", procurementOrderId);
         }
 
@@ -468,6 +513,7 @@ public class ProcurementService : IProcurementService
                 order.Status = ProcurementStatus.Paid;
                 order.StripePaymentIntentId = eventDto.PaymentIntentId;
                 await _context.SaveChangesAsync();
+                await NotifyAdminsAsync($"Procurement #{order.Id} Paid", $"Checkout webhook confirmed payment {eventDto.PaymentIntentId}.", "Info");
                 _logger.LogInformation("Procurement order {OrderId} marked as PAID via checkout metadata", order.Id);
                 return;
             }
@@ -504,11 +550,34 @@ public class ProcurementService : IProcurementService
         if (order.Status != ProcurementStatus.Pending) return;
 
         order.Status = ProcurementStatus.Paid;
-        if (string.IsNullOrEmpty(order.StripePaymentIntentId))
-            order.StripePaymentIntentId = eventDto.PaymentIntentId;
-        await _context.SaveChangesAsync();
+            if (string.IsNullOrEmpty(order.StripePaymentIntentId))
+                order.StripePaymentIntentId = eventDto.PaymentIntentId;
+            await _context.SaveChangesAsync();
+            await NotifyAdminsAsync($"Procurement #{order.Id} Paid", $"Payment webhook confirmed {eventDto.PaymentIntentId}.", "Info");
 
         _logger.LogInformation("Procurement order {OrderId} marked as PAID via payment_intent.succeeded", order.Id);
+    }
+
+    public async Task HandleWebhookPaymentFailedAsync(WebhookEventDto eventDto)
+    {
+        ProcurementOrder? order = null;
+
+        if (!string.IsNullOrEmpty(eventDto.PaymentIntentId))
+        {
+            order = await _context.ProcurementOrders
+                .FirstOrDefaultAsync(o => o.StripePaymentIntentId == eventDto.PaymentIntentId);
+        }
+
+        var title = order != null
+            ? $"Procurement #{order.Id} Payment Failed"
+            : "Procurement Payment Failed";
+        var message = string.IsNullOrEmpty(eventDto.PaymentIntentId)
+            ? "A procurement payment failed."
+            : $"Payment intent {eventDto.PaymentIntentId} failed.";
+
+        await NotifyAdminsAsync(title, message, "Warning");
+
+        _logger.LogWarning("Procurement payment failure notification created for PI {PaymentIntentId}", eventDto.PaymentIntentId);
     }
 
     public async Task HandleWebhookChargeRefundedAsync(WebhookEventDto eventDto)
@@ -520,5 +589,17 @@ public class ProcurementService : IProcurementService
             _logger.LogInformation("Procurement order {OrderId} refunded", order.Id);
 
         await Task.CompletedTask;
+    }
+
+    private async Task NotifyAdminsAsync(string title, string message, string type)
+    {
+        var adminIds = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.IsActive && u.Role == UserRole.Admin)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var adminId in adminIds)
+            await _notificationService.CreateSystemNotificationAsync(adminId, title, message, type);
     }
 }

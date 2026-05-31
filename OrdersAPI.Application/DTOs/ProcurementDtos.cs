@@ -11,6 +11,7 @@ public class ProcurementOrderDto
     public decimal TotalAmount { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? StripePaymentIntentId { get; set; }
+    public string? StripeCheckoutSessionId { get; set; }
     public string? Notes { get; set; }
     public DateTime OrderDate { get; set; }
     public DateTime? DeliveryDate { get; set; }
@@ -23,7 +24,7 @@ public class ProcurementOrderItemDto
     public Guid StoreProductId { get; set; }
     public string StoreProductName { get; set; } = string.Empty;
     public int Quantity { get; set; }
-    public int? ReceivedQuantity { get; set; }
+    public int ReceivedQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public decimal Subtotal { get; set; }
 }

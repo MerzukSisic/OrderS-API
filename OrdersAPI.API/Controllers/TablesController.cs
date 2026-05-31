@@ -14,9 +14,19 @@ namespace OrdersAPI.API.Controllers;
 public class TablesController(ITableService tableService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TableDto>>> GetTables([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
+    public async Task<ActionResult<IEnumerable<TableDto>>> GetTables(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100,
+        [FromQuery] string? status = null)
     {
-        var result = await tableService.GetAllTablesAsync(page, pageSize);
+        TableStatus? tableStatus = null;
+        if (status != null)
+        {
+            if (!Enum.TryParse<TableStatus>(status, ignoreCase: true, out var parsed))
+                return BadRequest($"Invalid table status '{status}'. Valid values: {string.Join(", ", Enum.GetNames<TableStatus>())}");
+            tableStatus = parsed;
+        }
+        var result = await tableService.GetAllTablesAsync(page, pageSize, tableStatus);
         Response.Headers["X-Total-Count"] = result.TotalCount.ToString();
         Response.Headers["X-Total-Pages"] = result.TotalPages.ToString();
         return Ok(result.Items);
