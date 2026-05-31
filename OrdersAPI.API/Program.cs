@@ -154,11 +154,6 @@ builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 // Stripe Service
 builder.Services.AddScoped<IStripeService, StripeService>();
 
-// Email Sender: use SmtpEmailSender when Email:Driver = "smtp", otherwise log-only dev sender
-if (builder.Configuration["Email:Driver"]?.ToLower() == "smtp")
-    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
-else
-    builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 
 // ==================== CORS (OPTIMIZED FOR DESKTOP) ====================
 builder.Services.AddCors(options =>

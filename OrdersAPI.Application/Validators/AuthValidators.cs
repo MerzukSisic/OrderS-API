@@ -23,13 +23,11 @@ public class ResetPasswordDtoValidator : AbstractValidator<ResetPasswordDto>
     {
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email je obavezan")
-            .EmailAddress().WithMessage("Email mora biti validna email adresa");
-
-        RuleFor(x => x.Token)
-            .NotEmpty().WithMessage("Token je obavezan");
+            .EmailAddress().WithMessage("Email mora biti validna adresa");
 
         RuleFor(x => x.NewPassword)
-            .NotEmpty().WithMessage("Novi password je obavezan")
-            .MinimumLength(6).WithMessage("Password mora imati najmanje 6 karaktera");
+            .NotEmpty().WithMessage("Nova lozinka je obavezna")
+            .MinimumLength(6).WithMessage("Lozinka mora imati najmanje 6 karaktera");
     }
 }
+

@@ -371,80 +371,36 @@ public class AuthControllerTests
 
     #endregion
 
-    #region ForgotPassword Tests
-
-    [Fact]
-    public async Task ForgotPassword_ValidEmail_ReturnsOkMessage()
-    {
-        // Arrange
-        var email = "test@example.com";
-
-        _authServiceMock
-            .Setup(x => x.RequestPasswordResetAsync(It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
-
-        // Act
-        var result = await _controller.ForgotPassword(new ForgotPasswordDto { Email = email });
-
-        // Assert
-        result.Should().BeOfType<OkObjectResult>();
-        var okResult = result as OkObjectResult;
-        okResult!.Value.Should().BeEquivalentTo(new
-        {
-            message = "If the email exists, a password reset link has been sent."
-        });
-
-        _authServiceMock.Verify(x => x.RequestPasswordResetAsync(email), Times.Once);
-    }
-
-    #endregion
-
     #region ResetPassword Tests
 
     [Fact]
-    public async Task ResetPassword_ValidToken_ReturnsSuccessMessage()
+    public async Task ResetPassword_ValidRequest_ReturnsSuccessMessage()
     {
-        // Arrange
-        var resetDto = new ResetPasswordDto
-        {
-            Token = "valid-reset-token",
-            NewPassword = "NewPassword123"
-        };
+        var resetDto = new ResetPasswordDto { Email = "test@example.com", NewPassword = "NewPassword123" };
 
         _authServiceMock
             .Setup(x => x.ResetPasswordAsync(It.IsAny<ResetPasswordDto>()))
             .Returns(Task.CompletedTask);
 
-        // Act
         var result = await _controller.ResetPassword(resetDto);
 
-        // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
         okResult!.Value.Should().BeEquivalentTo(new { message = "Password reset successful" });
-
         _authServiceMock.Verify(x => x.ResetPasswordAsync(resetDto), Times.Once);
     }
 
     [Fact]
-    public async Task ResetPassword_InvalidToken_ThrowsInvalidOperationException()
+    public async Task ResetPassword_UnknownEmail_ThrowsUnauthorized()
     {
-        // Arrange
-        var resetDto = new ResetPasswordDto
-        {
-            Token = "invalid-token",
-            NewPassword = "NewPassword123"
-        };
+        var resetDto = new ResetPasswordDto { Email = "ghost@example.com", NewPassword = "NewPassword123" };
 
         _authServiceMock
             .Setup(x => x.ResetPasswordAsync(It.IsAny<ResetPasswordDto>()))
-            .ThrowsAsync(new InvalidOperationException("Invalid or expired reset token"));
+            .ThrowsAsync(new UnauthorizedAccessException("User not found"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => 
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             _controller.ResetPassword(resetDto));
-
-        _authServiceMock.Verify(x => x.ResetPasswordAsync(resetDto), Times.Once);
     }
 
     #endregion

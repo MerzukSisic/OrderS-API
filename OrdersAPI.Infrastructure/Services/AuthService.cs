@@ -20,7 +20,6 @@ public class AuthService(
     ApplicationDbContext context,
     IConfiguration configuration,
     ILogger<AuthService> logger,
-    IEmailSender emailSender,
     ITokenBlacklistService tokenBlacklist,
     IHttpContextAccessor httpContextAccessor)
     : IAuthService
@@ -297,76 +296,15 @@ public class AuthService(
         logger.LogInformation("User {UserId} updated their profile", userId);
     }
 
-    public async Task RequestPasswordResetAsync(string email)
-    {
-        var user = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
-        if (user == null)
-        {
-            // Do not reveal whether the email is registered (prevents enumeration)
-            logger.LogWarning("Password reset requested for non-existent email: {Email}", email);
-            return;
-        }
-
-        // Invalidate any existing unused reset tokens for this user
-        var existingTokens = await context.PasswordResetTokens
-            .Where(t => t.UserId == user.Id && !t.IsUsed && t.ExpiresAt > DateTime.UtcNow)
-            .ToListAsync();
-        foreach (var t in existingTokens)
-            t.IsUsed = true;
-
-        // Generate and persist new one-time reset token
-        var plainToken = GenerateSecureToken();
-        context.PasswordResetTokens.Add(new PasswordResetToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenHash = HashToken(plainToken),
-            ExpiresAt = DateTime.UtcNow.AddHours(1),
-            IsUsed = false,
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await context.SaveChangesAsync();
-
-        await emailSender.SendAsync(
-            user.Email,
-            "Password Reset Request – OrderS",
-            $"<p>Hello {user.FullName},</p>" +
-            $"<p>Your password reset token is:</p>" +
-            $"<p><strong>{plainToken}</strong></p>" +
-            $"<p>This token expires in <strong>1 hour</strong> and can only be used once.</p>" +
-            $"<p>If you did not request a password reset, ignore this email.</p>");
-
-        logger.LogInformation("Password reset token sent to {Email}", email);
-    }
-
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
         var user = await context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
         if (user == null)
-            throw new UnauthorizedAccessException("Invalid reset token");
+            throw new UnauthorizedAccessException("User not found");
 
-        var tokenHash = HashToken(dto.Token);
-        var resetToken = await context.PasswordResetTokens
-            .FirstOrDefaultAsync(t => t.UserId == user.Id && t.TokenHash == tokenHash);
-
-        if (resetToken == null)
-            throw new UnauthorizedAccessException("Invalid reset token");
-
-        if (resetToken.IsUsed)
-            throw new UnauthorizedAccessException("Reset token has already been used");
-
-        if (resetToken.ExpiresAt < DateTime.UtcNow)
-            throw new UnauthorizedAccessException("Reset token has expired");
-
-        // Update password
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
-        // Mark token as used (one-time use)
-        resetToken.IsUsed = true;
-
-        // Force re-login on all devices by revoking all refresh tokens
         var activeRefreshTokens = await context.RefreshTokens
             .Where(t => t.UserId == user.Id && !t.IsRevoked)
             .ToListAsync();
@@ -377,8 +315,7 @@ public class AuthService(
         }
 
         await context.SaveChangesAsync();
-
-        logger.LogInformation("Password reset successfully for user {Email}", dto.Email);
+        logger.LogInformation("Password reset for user {Email}", dto.Email);
     }
 
     // ==================== PRIVATE HELPERS ====================

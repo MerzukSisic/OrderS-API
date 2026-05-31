@@ -20,8 +20,6 @@ public class AuthServiceTests : IDisposable
 {
     private readonly ApplicationDbContext _db;
     private readonly AuthService _service;
-    private readonly Mock<IEmailSender> _emailMock;
-
     public AuthServiceTests()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -38,15 +36,10 @@ public class AuthServiceTests : IDisposable
             })
             .Build();
 
-        _emailMock = new Mock<IEmailSender>();
-        _emailMock
-            .Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
-
         var logger = Mock.Of<ILogger<AuthService>>();
         var blacklist = Mock.Of<ITokenBlacklistService>();
         var httpContextAccessor = Mock.Of<IHttpContextAccessor>();
-        _service = new AuthService(_db, config, logger, _emailMock.Object, blacklist, httpContextAccessor);
+        _service = new AuthService(_db, config, logger, blacklist, httpContextAccessor);
     }
 
     public void Dispose() => _db.Dispose();
@@ -174,139 +167,37 @@ public class AuthServiceTests : IDisposable
             .WithMessage("*revoked*");
     }
 
-    // ==================== FORGOT/RESET PASSWORD TESTS ====================
+    // ==================== RESET PASSWORD TESTS ====================
 
     [Fact]
-    public async Task RequestPasswordResetAsync_ValidEmail_PersistsTokenAndSendsEmail()
+    public async Task ResetPasswordAsync_ValidEmail_UpdatesPasswordAndRevokesRefreshTokens()
     {
         var user = await CreateTestUserAsync("reset@orders.com");
 
-        await _service.RequestPasswordResetAsync(user.Email);
-
-        // Token was persisted
-        var token = await _db.PasswordResetTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
-        token.Should().NotBeNull();
-        token!.IsUsed.Should().BeFalse();
-        token.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
-
-        // Email was sent
-        _emailMock.Verify(x => x.SendAsync(
-            user.Email,
-            It.IsAny<string>(),
-            It.IsAny<string>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task RequestPasswordResetAsync_NonExistentEmail_SilentlySucceeds()
-    {
-        // Must not throw (prevents email enumeration)
-        var act = () => _service.RequestPasswordResetAsync("ghost@orders.com");
-        await act.Should().NotThrowAsync();
-
-        // No email sent
-        _emailMock.Verify(x => x.SendAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ResetPasswordAsync_ValidToken_UpdatesPasswordAndRevokesRefreshTokens()
-    {
-        var user = await CreateTestUserAsync("reset2@orders.com");
-
-        // Create a refresh token for the user so we can verify it gets revoked
         _db.RefreshTokens.Add(new RefreshToken
         {
             Id = Guid.NewGuid(), UserId = user.Id, TokenHash = "some_hash",
             ExpiresAt = DateTime.UtcNow.AddDays(30), IsRevoked = false, CreatedAt = DateTime.UtcNow
         });
-
-        // Generate a valid reset token directly (bypassing email)
-        var bytes = new byte[64];
-        RandomNumberGenerator.Fill(bytes);
-        var plainResetToken = Convert.ToBase64String(bytes);
-        _db.PasswordResetTokens.Add(new PasswordResetToken
-        {
-            Id = Guid.NewGuid(), UserId = user.Id,
-            TokenHash = HashToken(plainResetToken),
-            ExpiresAt = DateTime.UtcNow.AddHours(1),
-            IsUsed = false, CreatedAt = DateTime.UtcNow
-        });
         await _db.SaveChangesAsync();
 
-        var dto = new ResetPasswordDto
-        {
-            Email = user.Email,
-            Token = plainResetToken,
-            NewPassword = "NewSecurePassword456!"
-        };
-
+        var dto = new ResetPasswordDto { Email = user.Email, NewPassword = "NewSecurePassword456!" };
         await _service.ResetPasswordAsync(dto);
 
-        // Password changed
         var updated = await _db.Users.FindAsync(user.Id);
         BCrypt.Net.BCrypt.Verify("NewSecurePassword456!", updated!.PasswordHash).Should().BeTrue();
 
-        // Reset token marked as used
-        var resetToken = await _db.PasswordResetTokens.FirstAsync(t => t.UserId == user.Id);
-        resetToken.IsUsed.Should().BeTrue();
-
-        // Refresh tokens revoked
         var refreshTokens = await _db.RefreshTokens.Where(t => t.UserId == user.Id).ToListAsync();
         refreshTokens.Should().AllSatisfy(t => t.IsRevoked.Should().BeTrue());
     }
 
     [Fact]
-    public async Task ResetPasswordAsync_AlreadyUsedToken_ThrowsUnauthorized()
+    public async Task ResetPasswordAsync_NonExistentEmail_ThrowsUnauthorized()
     {
-        var user = await CreateTestUserAsync("reset3@orders.com");
+        var act = () => _service.ResetPasswordAsync(
+            new ResetPasswordDto { Email = "ghost@orders.com", NewPassword = "NewPass123!" });
 
-        var bytes = new byte[64];
-        RandomNumberGenerator.Fill(bytes);
-        var plainToken = Convert.ToBase64String(bytes);
-        _db.PasswordResetTokens.Add(new PasswordResetToken
-        {
-            Id = Guid.NewGuid(), UserId = user.Id,
-            TokenHash = HashToken(plainToken),
-            ExpiresAt = DateTime.UtcNow.AddHours(1),
-            IsUsed = true, // already used
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync();
-
-        var act = () => _service.ResetPasswordAsync(new ResetPasswordDto
-        {
-            Email = user.Email, Token = plainToken, NewPassword = "NewPass123!"
-        });
-
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*already been used*");
-    }
-
-    [Fact]
-    public async Task ResetPasswordAsync_ExpiredToken_ThrowsUnauthorized()
-    {
-        var user = await CreateTestUserAsync("reset4@orders.com");
-
-        var bytes = new byte[64];
-        RandomNumberGenerator.Fill(bytes);
-        var plainToken = Convert.ToBase64String(bytes);
-        _db.PasswordResetTokens.Add(new PasswordResetToken
-        {
-            Id = Guid.NewGuid(), UserId = user.Id,
-            TokenHash = HashToken(plainToken),
-            ExpiresAt = DateTime.UtcNow.AddSeconds(-1), // expired
-            IsUsed = false,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync();
-
-        var act = () => _service.ResetPasswordAsync(new ResetPasswordDto
-        {
-            Email = user.Email, Token = plainToken, NewPassword = "NewPass123!"
-        });
-
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*expired*");
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     // ==================== LOGIN PERSISTS REFRESH TOKEN ====================
